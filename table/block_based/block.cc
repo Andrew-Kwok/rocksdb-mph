@@ -359,8 +359,13 @@ void MetaBlockIter::SeekImpl(const Slice& target) {
 bool DataBlockIter::SeekForGetImpl(const Slice& target) {
   Slice target_user_key = ExtractUserKey(target);
   uint32_t map_offset = restarts_ + num_restarts_ * sizeof(uint32_t);
+
+  // TODO: Fix this
   uint8_t entry =
-      data_block_hash_index_->Lookup(data_, map_offset, target_user_key);
+      data_block_hash_index_
+          ? data_block_hash_index_->Lookup(data_, map_offset, target_user_key)
+          : data_block_perfect_hash_index_->Lookup(data_, map_offset,
+                                                   target_user_key);
 
   if (entry == kCollision) {
     // HashSeek not effective, falling back
@@ -1099,6 +1104,21 @@ Block::Block(BlockContents&& contents, size_t read_amp_bytes_per_bit,
           break;
         }
         break;
+      case BlockBasedTableOptions::kDataBlockBinaryAndPerfectHash:
+        data_block_perfect_hash_index_.Initialize(
+            contents_.data.data(),
+            /* chop off NUM_RESTARTS */
+            static_cast<uint16_t>(size - sizeof(uint32_t)), &map_offset);
+
+        restart_offset_ = map_offset - num_restarts_ * sizeof(uint32_t);
+
+        if (restart_offset_ > map_offset) {
+          // map_offset is too small for NumRestarts() and
+          // therefore restart_offset_ wrapped around.
+          size = 0;
+          break;
+        }
+        break;
       default:
         size = 0;  // Error marker
     }
@@ -1276,6 +1296,8 @@ DataBlockIter* Block::NewDataIterator(const Comparator* raw_ucmp,
         read_amp_bitmap_.get(), block_contents_pinned,
         user_defined_timestamps_persisted,
         data_block_hash_index_.Valid() ? &data_block_hash_index_ : nullptr,
+        data_block_perfect_hash_index_.Valid() ? &data_block_perfect_hash_index_
+                                               : nullptr,
         protection_bytes_per_key_, kv_checksum_, block_restart_interval_);
     if (read_amp_bitmap_) {
       if (read_amp_bitmap_->GetStatistics() != stats) {

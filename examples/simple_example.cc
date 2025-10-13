@@ -4,11 +4,13 @@
 //  (found in the LICENSE.Apache file in the root directory).
 
 #include <cstdio>
+#include <iostream>
 #include <string>
 
 #include "rocksdb/db.h"
 #include "rocksdb/options.h"
 #include "rocksdb/slice.h"
+#include "rocksdb/table.h"
 
 using ROCKSDB_NAMESPACE::DB;
 using ROCKSDB_NAMESPACE::Options;
@@ -27,11 +29,20 @@ std::string kDBPath = "/tmp/rocksdb_simple_example";
 int main() {
   DB* db;
   Options options;
+
+  rocksdb::BlockBasedTableOptions tbo;
+  tbo.data_block_index_type =
+      rocksdb::BlockBasedTableOptions::kDataBlockBinaryAndHash;
+
+  options.table_factory.reset(rocksdb::NewBlockBasedTableFactory(tbo));
+
   // Optimize RocksDB. This is the easiest way to get RocksDB to perform well
   options.IncreaseParallelism();
   options.OptimizeLevelStyleCompaction();
   // create the DB if it's not already present
   options.create_if_missing = true;
+
+  std::cout << "Table Factory: " << options.table_factory->Name() << '\n';
 
   // open DB
   Status s = DB::Open(options, kDBPath, &db);
@@ -86,6 +97,8 @@ int main() {
   assert(pinnable_val == "value");
   pinnable_val.Reset();
   // The Slice pointed by pinnable_val is not valid after this point
+
+  puts("simple_example: ok");
 
   delete db;
 

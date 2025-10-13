@@ -94,6 +94,10 @@ inline uint32_t BloomHash(const Slice& key) {
   return Hash(key.data(), key.size(), 0xbc9f1d34);
 }
 
+inline uint64_t GetSliceHash64(const Slice& key, uint64_t seed) {
+  return Hash64(key.data(), key.size(), seed);
+}
+
 inline uint64_t GetSliceHash64(const Slice& key) {
   return Hash64(key.data(), key.size());
 }

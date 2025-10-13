@@ -24,6 +24,7 @@
 #include "rocksdb/table.h"
 #include "table/block_based/block_prefix_index.h"
 #include "table/block_based/data_block_hash_index.h"
+#include "table/block_based/data_block_perfect_hash_index.h"
 #include "table/format.h"
 #include "table/internal_iterator.h"
 #include "test_util/sync_point.h"
@@ -286,6 +287,7 @@ class Block {
   uint32_t block_restart_interval_{0};
   uint8_t protection_bytes_per_key_{0};
   DataBlockHashIndex data_block_hash_index_;
+  DataBlockPerfectHashIndex data_block_perfect_hash_index_;
 };
 
 // A `BlockIter` iterates over the entries in a `Block`'s data buffer. The
@@ -691,6 +693,7 @@ class DataBlockIter final : public BlockIter<Slice> {
                   bool block_contents_pinned,
                   bool user_defined_timestamps_persisted,
                   DataBlockHashIndex* data_block_hash_index,
+                  DataBlockPerfectHashIndex* data_block_perfect_hash_index,
                   uint8_t protection_bytes_per_key, const char* kv_checksum,
                   uint32_t block_restart_interval) {
     InitializeBase(raw_ucmp, data, restarts, num_restarts, global_seqno,
@@ -701,6 +704,7 @@ class DataBlockIter final : public BlockIter<Slice> {
     read_amp_bitmap_ = read_amp_bitmap;
     last_bitmap_offset_ = current_ + 1;
     data_block_hash_index_ = data_block_hash_index;
+    data_block_perfect_hash_index_ = data_block_perfect_hash_index;
   }
 
   Slice value() const override {
@@ -719,7 +723,8 @@ class DataBlockIter final : public BlockIter<Slice> {
 #ifndef NDEBUG
     if (TEST_Corrupt_Callback("DataBlockIter::SeekForGet")) return true;
 #endif
-    if (!data_block_hash_index_) {
+    // TODO: Fix this hack
+    if (!data_block_hash_index_ && !data_block_perfect_hash_index_) {
       SeekImpl(target);
       UpdateKey();
       return true;
@@ -777,6 +782,7 @@ class DataBlockIter final : public BlockIter<Slice> {
   int32_t prev_entries_idx_ = -1;
 
   DataBlockHashIndex* data_block_hash_index_;
+  DataBlockPerfectHashIndex* data_block_perfect_hash_index_;
 
   bool SeekForGetImpl(const Slice& target);
 };
