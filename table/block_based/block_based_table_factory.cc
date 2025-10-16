@@ -188,7 +188,10 @@ static std::unordered_map<std::string,
         {"kDataBlockBinarySearch",
          BlockBasedTableOptions::DataBlockIndexType::kDataBlockBinarySearch},
         {"kDataBlockBinaryAndHash",
-         BlockBasedTableOptions::DataBlockIndexType::kDataBlockBinaryAndHash}};
+         BlockBasedTableOptions::DataBlockIndexType::kDataBlockBinaryAndHash},
+        {"kDataBlockBinaryAndPerfectHash",
+         BlockBasedTableOptions::DataBlockIndexType::
+             kDataBlockBinaryAndPerfectHash}};
 
 static std::unordered_map<std::string,
                           BlockBasedTableOptions::IndexShorteningMode>

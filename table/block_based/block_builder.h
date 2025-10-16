@@ -70,9 +70,13 @@ class BlockBuilder {
   // Returns an estimate of the current (uncompressed) size of the block
   // we are building.
   inline size_t CurrentSizeEstimate() const {
-    return estimate_ + (data_block_hash_index_builder_.Valid()
-                            ? data_block_hash_index_builder_.EstimateSize()
-                            : 0);
+    return estimate_ +
+           (data_block_hash_index_builder_.Valid()
+                ? data_block_hash_index_builder_.EstimateSize()
+                : 0) +
+           (data_block_perfect_hash_index_builder_.Valid()
+                ? data_block_perfect_hash_index_builder_.EstimateSize()
+                : 0);
   }
 
   // Returns an estimated block size after appending key and value.

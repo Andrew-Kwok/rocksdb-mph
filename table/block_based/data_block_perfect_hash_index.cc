@@ -21,7 +21,7 @@ void DataBlockPerfectHashIndexBuilder::Add(const Slice& key,
   key_and_restart_pairs_.emplace_back(key.ToString(),
                                       static_cast<uint8_t>(restart_index));
 
-  if (key_and_restart_pairs_.size() > kMaxRestartSupportedByHashIndex) {
+  if (EstimateSize() > kMaxBlockSizeSupportedByHashIndex) {
     valid_ = false;
   }
 }
