@@ -9,6 +9,7 @@
 
 #include "table/block_based/data_block_footer.h"
 
+#include "monitoring/statistics_impl.h"
 #include "rocksdb/table.h"
 
 namespace ROCKSDB_NAMESPACE {

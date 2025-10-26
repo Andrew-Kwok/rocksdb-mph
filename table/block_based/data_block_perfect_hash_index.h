@@ -50,7 +50,7 @@ class DataBlockPerfectHashIndex {
 
   uint8_t Lookup(const char* data, uint32_t map_offset, const Slice& key) const;
 
-  inline bool Valid() const { return true; }
+  inline bool Valid() const { return !level_capacity_.empty(); }
 
  private:
   uint16_t bit_vector_size_;
