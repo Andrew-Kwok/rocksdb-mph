@@ -17,6 +17,10 @@ void DataBlockPerfectHashIndexBuilder::Add(const Slice& key,
     valid_ = false;
     return;
   }
+  if (key_and_restart_pairs_.size() >= 255) { // allow all mph encoding using only uint8_t
+    valid_ = false;
+    return;
+  }
 
   key_and_restart_pairs_.emplace_back(key.ToString(),
                                       static_cast<uint8_t>(restart_index));
@@ -32,7 +36,7 @@ void DataBlockPerfectHashIndexBuilder::Finish(std::string& buffer) {
 
   std::vector<std::pair<Slice, uint8_t>> kvs;
   kvs.reserve(key_and_restart_pairs_.size());
-  for (uint16_t i = 0; i < key_and_restart_pairs_.size(); ++i) {
+  for (uint8_t i = 0; i < key_and_restart_pairs_.size(); ++i) {
     Slice s(key_and_restart_pairs_[i].first);
     uint8_t restart_index{key_and_restart_pairs_[i].second};
     kvs.emplace_back(s, restart_index);
@@ -40,18 +44,18 @@ void DataBlockPerfectHashIndexBuilder::Finish(std::string& buffer) {
 
   // Constructing Minimal Perfect Hashing
   std::vector<bool> all;
-  all.reserve(kvs.size() * 3);
+  all.reserve(kvs.size() * 2);
 
-  std::vector<uint16_t> level_capacity;
+  std::vector<uint8_t> level_capacity;
   std::vector<uint8_t> values;
-  for (uint16_t level = 0; !kvs.empty(); ++level) {
+  for (uint8_t level = 0; !kvs.empty(); ++level) {
     uint64_t seed = (level + 1) * kSeedJump;
-    uint16_t cap = static_cast<uint16_t>(kvs.size());
+    uint8_t cap = static_cast<uint8_t>(kvs.size());
     level_capacity.push_back(cap);
 
-    uint16_t ones = 0;
-    std::vector<uint16_t> used(cap, 0), h(cap, 0), h_inv(cap, 0);
-    for (uint16_t i = 0; i < cap; ++i) {
+    uint8_t ones = 0;
+    std::vector<uint8_t> used(cap, 0), h(cap, 0), h_inv(cap, 0);
+    for (uint8_t i = 0; i < cap; ++i) {
       h[i] = GetSliceHash64(kvs[i].first, seed) % cap;
       h_inv[h[i]] = i;
       ++used[h[i]];
@@ -61,7 +65,7 @@ void DataBlockPerfectHashIndexBuilder::Finish(std::string& buffer) {
     }
 
     all.reserve(all.size() + ones);
-    for (uint16_t i = 0; i < cap; ++i) {
+    for (uint8_t i = 0; i < cap; ++i) {
       if (used[i] == 1) {
         all.push_back(true);
         values.push_back(kvs[h_inv[i]].second);
@@ -72,7 +76,7 @@ void DataBlockPerfectHashIndexBuilder::Finish(std::string& buffer) {
 
     std::vector<std::pair<Slice, uint8_t>> nxt;
     nxt.reserve(cap - ones);
-    for (uint16_t i = 0; i < cap; ++i)
+    for (uint8_t i = 0; i < cap; ++i)
       if (used[h[i]] != 1) {
         nxt.push_back(kvs[i]);
       }
@@ -80,32 +84,33 @@ void DataBlockPerfectHashIndexBuilder::Finish(std::string& buffer) {
   }
 
   // Constructing Bit Vector
-  std::vector<uint16_t> bit_v((all.size() + 15) / 16, 0);
-  for (uint16_t i = 0; i < all.size(); ++i)
+  std::vector<uint8_t> bit_v((all.size() + 7) / 8, 0);
+  for (uint16_t i = 0; i < all.size(); ++i) {
     if (all[i]) {
-      bit_v[i >> 4] |= 1 << (i & 15);
+      bit_v[i >> 3] |= 1 << (i & 7);
     }
+  }
 
-  std::vector<uint16_t> rank_prefix(bit_v.size());
+  std::vector<uint8_t> rank_prefix(bit_v.size());
   rank_prefix[0] = __builtin_popcount(bit_v[0]);
-  for (uint16_t i = 1; i < bit_v.size(); ++i) {
+  for (uint8_t i = 1; i < bit_v.size(); ++i) {
     rank_prefix[i] = rank_prefix[i - 1] + __builtin_popcount(bit_v[i]);
   }
 
   // Encoding [bit_v] [rank_prefix] [values] [level capacity] [NUM_LEVELS]
   // [BIT_VECTOR_SIZE]
-  size_t mph_size = bit_v.size() * 16 + rank_prefix.size() * 16 +
-                    values.size() * 8 + level_capacity.size() * 16 + 16 + 16;
+  size_t mph_size = bit_v.size() * 8 + rank_prefix.size() * 8 +
+                    values.size() * 8 + level_capacity.size() * 8 + 8 + 16;
   if (buffer.size() + mph_size > kMaxBlockSizeSupportedByHashIndex) {
     valid_ = false;
     return;
   }
 
-  for (uint16_t bit_i : bit_v) {
+  for (uint8_t bit_i : bit_v) {
     buffer.append(const_cast<const char*>(reinterpret_cast<char*>(&bit_i)),
                   sizeof bit_i);
   }
-  for (uint16_t rank_i : rank_prefix) {
+  for (uint8_t rank_i : rank_prefix) {
     buffer.append(const_cast<const char*>(reinterpret_cast<char*>(&rank_i)),
                   sizeof rank_i);
   }
@@ -114,13 +119,15 @@ void DataBlockPerfectHashIndexBuilder::Finish(std::string& buffer) {
         const_cast<const char*>(reinterpret_cast<char*>(&restart_index)),
         sizeof(restart_index));
   }
-  for (uint16_t level_cap : level_capacity) {
+  for (uint8_t level_cap : level_capacity) {
     buffer.append(const_cast<const char*>(reinterpret_cast<char*>(&level_cap)),
                   sizeof level_cap);
   }
 
   // NUM_LEVELS
-  PutFixed16(&buffer, static_cast<uint16_t>(level_capacity.size()));
+  uint8_t num_levels = static_cast<uint8_t>(level_capacity.size());
+  buffer.append(const_cast<const char*>(reinterpret_cast<char*>(&num_levels)), sizeof(num_levels));
+  // PutFixed16(&buffer, static_cast<uint16_t>(level_capacity.size()));
 
   // BIT_VECTOR_SIZE
   PutFixed16(&buffer, static_cast<uint16_t>(bit_v.size()));
@@ -133,19 +140,19 @@ void DataBlockPerfectHashIndexBuilder::Reset() {
 
 void DataBlockPerfectHashIndex::Initialize(const char* data, uint16_t size,
                                            uint16_t* map_offset) {
-  assert(size >= sizeof(uint16_t) * 2);  // NUM_LEVELS + BIT_VECTOR_SIZE
+  assert(size >= sizeof(uint8_t) + sizeof(uint16_t));  // NUM_LEVELS + BIT_VECTOR_SIZE
   bit_vector_size_ = DecodeFixed16(data + size - sizeof(uint16_t));
 
-  uint16_t num_levels = DecodeFixed16(data + size - 2 * sizeof(uint16_t));
+  uint8_t num_levels = DecodeFixed8(data + size - sizeof(uint16_t) - sizeof(uint8_t));
   level_capacity_.resize(num_levels);
-  for (uint16_t i = 0; i < num_levels; ++i) {
+  for (uint8_t i = 0; i < num_levels; ++i) {
     level_capacity_[num_levels - i - 1] =
-        DecodeFixed16(data + size - (2 + i + 1) * sizeof(uint16_t));
+        DecodeFixed8(data + size - sizeof(uint16_t) - (1 + i + 1) * sizeof(uint8_t));
   }
 
-  uint16_t num_restart_index = level_capacity_[0];
+  uint8_t num_restart_index = level_capacity_[0];
   uint16_t mph_size =
-      (2 * bit_vector_size_ + num_levels + 2) * sizeof(uint16_t) +
+      sizeof(uint16_t) + (2 * bit_vector_size_ + num_levels + 1) * sizeof(uint8_t) +
       num_restart_index * sizeof(uint8_t);
   *map_offset = static_cast<uint16_t>(size - mph_size);
 }
@@ -153,22 +160,22 @@ void DataBlockPerfectHashIndex::Initialize(const char* data, uint16_t size,
 bool DataBlockPerfectHashIndex::get_bit(const char* data, uint32_t map_offset,
                                         uint16_t i) const {
   const char* bit_vector = data + map_offset;
-  uint16_t block = (i >> 4);
-  uint16_t bit_word = DecodeFixed16(bit_vector + block * sizeof(uint16_t));
-  return (bit_word >> (i & 15)) & 1;
+  uint16_t block = (i >> 3);
+  uint8_t bit_word = DecodeFixed8(bit_vector + block * sizeof(uint8_t));
+  return (bit_word >> (i & 7)) & 1;
 }
 
 uint16_t DataBlockPerfectHashIndex::rank_bit(const char* data,
                                              uint32_t map_offset,
                                              uint16_t i) const {
   const char* bit_vector = data + map_offset;
-  uint16_t block = (i >> 4);
-  uint16_t bit_word = DecodeFixed16(bit_vector + block * sizeof(uint16_t));
-  uint16_t mask = (1 << (i & 15)) - 1;
+  uint16_t block = (i >> 3);
+  uint16_t bit_word = DecodeFixed8(bit_vector + block * sizeof(uint8_t));
+  uint8_t mask = (1 << (i & 7)) - 1;
   if (block) {
-    const char* rank_prefix = bit_vector + bit_vector_size_ * sizeof(uint16_t);
-    uint16_t rank_p =
-        DecodeFixed16(rank_prefix + (block - 1) * sizeof(uint16_t));
+    const char* rank_prefix = bit_vector + bit_vector_size_ * sizeof(uint8_t);
+    uint8_t rank_p =
+        DecodeFixed8(rank_prefix + (block - 1) * sizeof(uint8_t));
     return rank_p + __builtin_popcount(bit_word & mask);
   } else {
     return __builtin_popcount(bit_word & mask);
@@ -178,7 +185,7 @@ uint16_t DataBlockPerfectHashIndex::rank_bit(const char* data,
 uint8_t DataBlockPerfectHashIndex::Lookup(const char* data, uint32_t map_offset,
                                           const Slice& key) const {
   uint16_t pos = 0;
-  for (uint16_t level = 0; level < level_capacity_.size(); ++level) {
+  for (uint8_t level = 0; level < level_capacity_.size(); ++level) {
     uint64_t seed = (level + 1) * kSeedJump;
     auto h = GetSliceHash64(key, seed) % level_capacity_[level];
 
@@ -187,9 +194,9 @@ uint8_t DataBlockPerfectHashIndex::Lookup(const char* data, uint32_t map_offset,
 
       const char* bit_vector = data + map_offset;
       const char* rank_prefix =
-          bit_vector + bit_vector_size_ * sizeof(uint16_t);
+          bit_vector + bit_vector_size_ * sizeof(uint8_t);
       const char* restart_indices =
-          rank_prefix + bit_vector_size_ * sizeof(uint16_t);
+          rank_prefix + bit_vector_size_ * sizeof(uint8_t);
 
       return static_cast<uint8_t>(*(restart_indices + rank * sizeof(uint8_t)));
     }
