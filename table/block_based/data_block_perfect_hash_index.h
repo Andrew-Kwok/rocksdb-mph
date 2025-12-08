@@ -15,6 +15,11 @@ const uint64_t kSeedJump = 676767677;
 
 class DataBlockPerfectHashIndexBuilder {
  public:
+  size_t stats_num_levels{};
+  size_t stats_size{};
+  size_t stats_est_size{};
+  size_t stats_entry_count{};
+
   DataBlockPerfectHashIndexBuilder() : valid_(false) {}
 
   void Initialize() { valid_ = true; }
@@ -24,16 +29,16 @@ class DataBlockPerfectHashIndexBuilder {
   void Finish(std::string& buffer);
   void Reset();
   inline size_t EstimateSize() const {
-    size_t estimated_num_bits = key_and_restart_pairs_.size() *
-                                2;  // expected n*e bits under poisson(1)
-    size_t bit_size = ((estimated_num_bits + 7) / 8) * 8;
-    size_t rank_prefix_size = bit_size;
-    size_t restart_indices_size = key_and_restart_pairs_.size() * 8;
-    size_t level_capacities_size =
-        std::ceil(log2(key_and_restart_pairs_.size())) * 8;
+    const size_t n = key_and_restart_pairs_.size();
+    // constexpr size_t kBytesPerKeyEstimate = 3;
+    // size_t estimated_num_bits = key_and_restart_pairs_.size() * 5;  // expected n*e bits under poisson(1)
+    // size_t bit_size = (estimated_num_bits + 7) / 8 * sizeof(uint8_t);
+    // size_t rank_prefix_size = bit_size;
+    // size_t restart_indices_size = key_and_restart_pairs_.size() * sizeof(uint8_t);
+    size_t expected_num_level =
+        std::ceil(log2(key_and_restart_pairs_.size()));
 
-    return bit_size + rank_prefix_size + restart_indices_size +
-           level_capacities_size + 8 + 16;
+    return size_t(n * 2.7) + expected_num_level * sizeof(uint8_t) + sizeof(uint8_t) + sizeof(uint16_t);
   }
 
  private:
@@ -43,7 +48,9 @@ class DataBlockPerfectHashIndexBuilder {
 };
 
 class DataBlockPerfectHashIndex {
- public:
+public:
+  mutable uint64_t stats_lookup_time{};
+
   DataBlockPerfectHashIndex() {}
 
   void Initialize(const char* data, uint16_t size, uint16_t* map_offset);

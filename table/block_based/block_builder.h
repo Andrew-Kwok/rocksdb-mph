@@ -85,6 +85,17 @@ class BlockBuilder {
   // Return true iff no entries have been added since the last Reset()
   bool empty() const { return buffer_.empty(); }
 
+  inline size_t GetHashIndexCancelledKeys() { return data_block_hash_index_builder_.cancelled_keys; }
+  inline size_t GetHashIndexValidKeys() { return data_block_hash_index_builder_.valid_keys; }
+  inline size_t GetHashIndexNumBuckets() { return data_block_hash_index_builder_.monitoring_num_buckets; }
+  inline size_t GetHashIndexNumValidBuckets() { return data_block_hash_index_builder_.monitoring_num_valid_buckets; }
+  inline size_t GetHashIndexNumCancelledBuckets() { return data_block_hash_index_builder_.monitoring_num_cancelled_buckets; }
+
+  inline size_t GetPerfectHashIndexNumLevels() { return data_block_perfect_hash_index_builder_.stats_num_levels; }
+  inline size_t GetPerfectHashIndexNumEntry() { return data_block_perfect_hash_index_builder_.stats_entry_count; }
+  inline size_t GetPerfectHashIndexEstSize() { return data_block_perfect_hash_index_builder_.stats_est_size; }
+  inline size_t GetPerfectHashIndexActSize() { return data_block_perfect_hash_index_builder_.stats_size; }
+
  private:
   inline void AddWithLastKeyImpl(const Slice& key, const Slice& value,
                                  const Slice& last_key,

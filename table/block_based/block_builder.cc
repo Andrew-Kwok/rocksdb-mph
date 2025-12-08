@@ -146,12 +146,13 @@ Slice BlockBuilder::Finish() {
       CurrentSizeEstimate() <= kMaxBlockSizeSupportedByHashIndex) {
     data_block_hash_index_builder_.Finish(buffer_);
     index_type = BlockBasedTableOptions::kDataBlockBinaryAndHash;
-  } else if (data_block_perfect_hash_index_builder_.Valid()) {
+  } else if (data_block_perfect_hash_index_builder_.Valid() && CurrentSizeEstimate() <= kMaxBlockSizeSupportedByHashIndex) {
     // TODO: Should fix Finish to return boolean
     data_block_perfect_hash_index_builder_.Finish(buffer_);
-    if (data_block_perfect_hash_index_builder_.Valid()) {
-      index_type = BlockBasedTableOptions::kDataBlockBinaryAndPerfectHash;
-    }
+    index_type = BlockBasedTableOptions::kDataBlockBinaryAndPerfectHash;
+    // if (data_block_perfect_hash_index_builder_.Valid()) {
+    //   index_type = BlockBasedTableOptions::kDataBlockBinaryAndPerfectHash;
+    // }
   }
 
   // footer is a packed format of data_block_index_type and num_restarts
@@ -260,7 +261,10 @@ inline void BlockBuilder::AddWithLastKeyImpl(const Slice& key,
     assert(!is_user_key_);
     data_block_hash_index_builder_.Add(ExtractUserKey(key),
                                        restarts_.size() - 1);
-  } else if (data_block_perfect_hash_index_builder_.Valid()) {
+  }
+
+  if (data_block_perfect_hash_index_builder_.Valid()) {
+    assert(!is_user_key_);
     data_block_perfect_hash_index_builder_.Add(ExtractUserKey(key),
                                                restarts_.size() - 1);
   }

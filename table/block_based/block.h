@@ -694,6 +694,7 @@ class DataBlockIter final : public BlockIter<Slice> {
                   bool user_defined_timestamps_persisted,
                   DataBlockHashIndex* data_block_hash_index,
                   DataBlockPerfectHashIndex* data_block_perfect_hash_index,
+                  Statistics* statistics,
                   uint8_t protection_bytes_per_key, const char* kv_checksum,
                   uint32_t block_restart_interval) {
     InitializeBase(raw_ucmp, data, restarts, num_restarts, global_seqno,
@@ -705,6 +706,7 @@ class DataBlockIter final : public BlockIter<Slice> {
     last_bitmap_offset_ = current_ + 1;
     data_block_hash_index_ = data_block_hash_index;
     data_block_perfect_hash_index_ = data_block_perfect_hash_index;
+    statistics_ = statistics;
   }
 
   Slice value() const override {
@@ -723,15 +725,19 @@ class DataBlockIter final : public BlockIter<Slice> {
 #ifndef NDEBUG
     if (TEST_Corrupt_Callback("DataBlockIter::SeekForGet")) return true;
 #endif
-    // TODO: Fix this hack
-    if (!data_block_hash_index_ && !data_block_perfect_hash_index_) {
+    if (data_block_hash_index_) {
+      bool res = SeekForGetImpl(target);
+      UpdateKey();
+      return res;
+    } else if (data_block_perfect_hash_index_) {
+      bool res = SeekForGetImpl(target);
+      UpdateKey();
+      return res;
+    } else {
       SeekImpl(target);
       UpdateKey();
       return true;
     }
-    bool res = SeekForGetImpl(target);
-    UpdateKey();
-    return res;
   }
 
   void Invalidate(const Status& s) override {
@@ -783,8 +789,10 @@ class DataBlockIter final : public BlockIter<Slice> {
 
   DataBlockHashIndex* data_block_hash_index_;
   DataBlockPerfectHashIndex* data_block_perfect_hash_index_;
+  Statistics* statistics_;
 
   bool SeekForGetImpl(const Slice& target);
+  bool SeekForGetPerfectHashImpl(const Slice& target);
 };
 
 // Iterator over MetaBlocks.  MetaBlocks are similar to Data Blocks and

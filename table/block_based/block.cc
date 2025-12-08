@@ -367,6 +367,10 @@ bool DataBlockIter::SeekForGetImpl(const Slice& target) {
           : data_block_perfect_hash_index_->Lookup(data_, map_offset,
                                                    target_user_key);
 
+  if (data_block_perfect_hash_index_ && statistics_) {
+    RecordTimeToHistogram(statistics_, TABLE_PERFECT_HASH_SEEK_TIME, data_block_perfect_hash_index_->stats_lookup_time);
+  }
+
   if (entry == kCollision) {
     // HashSeek not effective, falling back
     SeekImpl(target);
@@ -466,6 +470,59 @@ bool DataBlockIter::SeekForGetImpl(const Slice& target) {
   // Result found, and the iter is correctly set.
   return true;
 }
+
+bool DataBlockIter::SeekForGetPerfectHashImpl(const Slice& target) {
+  Slice target_user_key = ExtractUserKey(target);
+  uint32_t map_offset = restarts_ + num_restarts_ * sizeof(uint32_t);
+  uint8_t entry = data_block_perfect_hash_index_->Lookup(data_, map_offset, target_user_key);
+
+  if (entry == kNoEntry) {
+    entry = static_cast<uint8_t>(num_restarts_ - 1);
+  }
+
+  uint32_t restart_index = entry;
+  SeekToRestartPoint(restart_index);
+  current_ = GetRestartPoint(restart_index);
+  cur_entry_idx_ =
+      static_cast<int32_t>(restart_index * block_restart_interval_) - 1;
+  uint32_t limit = restarts_;
+  if (restart_index + 1 < num_restarts_) {
+    limit = GetRestartPoint(restart_index + 1);
+  }
+  // --- Linear scan inside this restart interval ---
+  while (current_ < limit) {
+    ++cur_entry_idx_;
+    bool shared;
+    if (!ParseNextDataKey(&shared) || CompareCurrentKey(target) >= 0) {
+      // Stop at the first key >= target
+      break;
+    }
+  }
+
+  if (current_ == restarts_) {
+    return true;  // may exist in next block
+  }
+
+  if (icmp_->user_comparator()->Compare(raw_key_.GetUserKey(),
+                                        target_user_key) != 0) {
+    return false;  // definitely not in this block
+  }
+
+  ValueType value_type = ExtractValueType(raw_key_.GetInternalKey());
+  if (value_type != ValueType::kTypeValue &&
+      value_type != ValueType::kTypeDeletion &&
+      value_type != ValueType::kTypeMerge &&
+      value_type != ValueType::kTypeSingleDeletion &&
+      value_type != ValueType::kTypeBlobIndex &&
+      value_type != ValueType::kTypeWideColumnEntity &&
+      value_type != ValueType::kTypeValuePreferredSeqno) {
+    SeekImpl(target);
+  }
+
+  // Result found, and the iter is correctly set.
+  return true;
+}
+
 
 void IndexBlockIter::SeekImpl(const Slice& target) {
 #ifndef NDEBUG
@@ -1105,14 +1162,22 @@ Block::Block(BlockContents&& contents, size_t read_amp_bytes_per_bit,
         }
         break;
       case BlockBasedTableOptions::kDataBlockBinaryAndPerfectHash:
+        if (size < sizeof(uint32_t) /* block footer */
+          + sizeof(uint8_t) /* num levels */
+          + sizeof(uint16_t) /* bit vector size */) {
+          size = 0;
+          break;
+        }
+
+        uint16_t pmap_offset;
         data_block_perfect_hash_index_.Initialize(
             contents_.data.data(),
             /* chop off NUM_RESTARTS */
-            static_cast<uint16_t>(size - sizeof(uint32_t)), &map_offset);
+            static_cast<uint16_t>(size - sizeof(uint32_t)), &pmap_offset);
 
-        restart_offset_ = map_offset - num_restarts_ * sizeof(uint32_t);
+        restart_offset_ = pmap_offset - num_restarts_ * sizeof(uint32_t);
 
-        if (restart_offset_ > map_offset) {
+        if (restart_offset_ > pmap_offset) {
           // map_offset is too small for NumRestarts() and
           // therefore restart_offset_ wrapped around.
           size = 0;
@@ -1298,6 +1363,7 @@ DataBlockIter* Block::NewDataIterator(const Comparator* raw_ucmp,
         data_block_hash_index_.Valid() ? &data_block_hash_index_ : nullptr,
         data_block_perfect_hash_index_.Valid() ? &data_block_perfect_hash_index_
                                                : nullptr,
+        stats,
         protection_bytes_per_key_, kv_checksum_, block_restart_interval_);
     if (read_amp_bitmap_) {
       if (read_amp_bitmap_->GetStatistics() != stats) {

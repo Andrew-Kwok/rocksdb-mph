@@ -36,6 +36,7 @@
 #include "rocksdb/filter_policy.h"
 #include "rocksdb/flush_block_policy.h"
 #include "rocksdb/merge_operator.h"
+#include "rocksdb/statistics.h"
 #include "rocksdb/table.h"
 #include "rocksdb/types.h"
 #include "table/block_based/block.h"
@@ -1285,11 +1286,20 @@ void BlockBasedTableBuilder::Flush() {
   if (r->ioptions.stats) {
     uint32_t block_footer = DecodeFixed32(uncompressed_block_data.data() + uncompressed_block_data.size() - sizeof(uint32_t));
     if (block_footer >> 31 & 1) {  // rocksdb hash index
-      RecordTick(r->ioptions.stats, BLOCK_HASH_INDEX_COUNT);
+      RecordTick(r->ioptions.stats, BLOCK_HASH_INDEX_CANCELLED, r->data_block.GetHashIndexCancelledKeys());
+      RecordTick(r->ioptions.stats, BLOCK_HASH_INDEX_VALID, r->data_block.GetHashIndexValidKeys());
+      RecordTick(r->ioptions.stats, BLOCK_HASH_INDEX_BUCKETS, r->data_block.GetHashIndexNumBuckets());
+      RecordTick(r->ioptions.stats, BLOCK_HASH_INDEX_BUCKETS_CANCELLED, r->data_block.GetHashIndexNumCancelledBuckets());
+      RecordTick(r->ioptions.stats, BLOCK_HASH_INDEX_BUCKETS_VALID, r->data_block.GetHashIndexNumValidBuckets());
+      RecordTick(r->ioptions.stats, BLOCK_HASH_INDEX);
     } else if (block_footer >> 30 & 1) {  // perfect hash index
-      RecordTick(r->ioptions.stats, BLOCK_PERFECT_HASH_INDEX_COUNT);
+      RecordTick(r->ioptions.stats, BLOCK_PERFECT_HASH_INDEX);
+      RecordInHistogram(r->ioptions.stats, TABLE_PERFECT_HASH_NUM_LEVEL_COUNT, r->data_block.GetPerfectHashIndexNumLevels());
+      RecordInHistogram(r->ioptions.stats, TABLE_PERFECT_HASH_ENTRY_COUNT, r->data_block.GetPerfectHashIndexNumEntry());
+      RecordInHistogram(r->ioptions.stats, TABLE_PERFECT_HASH_SIZES_EST, r->data_block.GetPerfectHashIndexEstSize());
+      RecordInHistogram(r->ioptions.stats, TABLE_PERFECT_HASH_SIZES, r->data_block.GetPerfectHashIndexActSize());
     } else {  // no hash index
-      RecordTick(r->ioptions.stats, BLOCK_NO_HASH_INDEX_COUNT);
+      RecordTick(r->ioptions.stats, BLOCK_NO_HASH_INDEX);
     }
   }
 

@@ -73,6 +73,13 @@ const double kDefaultUtilRatio = 0.75;
 
 class DataBlockHashIndexBuilder {
  public:
+  // For Monitoring
+  size_t valid_keys{};
+  size_t cancelled_keys{};
+  size_t monitoring_num_buckets{};
+  size_t monitoring_num_cancelled_buckets{};
+  size_t monitoring_num_valid_buckets{};
+
   DataBlockHashIndexBuilder()
       : bucket_per_key_(-1 /*uninitialized marker*/),
         estimated_num_buckets_(0),
@@ -84,6 +91,7 @@ class DataBlockHashIndexBuilder {
     }
     bucket_per_key_ = 1 / util_ratio;
     valid_ = true;
+    cancelled_keys = valid_keys = 0;
   }
 
   inline bool Valid() const { return valid_ && bucket_per_key_ > 0; }

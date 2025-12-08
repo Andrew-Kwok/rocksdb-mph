@@ -1,5 +1,6 @@
 #include "table/block_based/data_block_perfect_hash_index.h"
 
+#include <chrono>
 #include <string>
 #include <vector>
 
@@ -13,11 +14,11 @@ namespace ROCKSDB_NAMESPACE {
 void DataBlockPerfectHashIndexBuilder::Add(const Slice& key,
                                            const size_t restart_index) {
   assert(Valid());
-  if (restart_index > kMaxBlockSizeSupportedByHashIndex) {
+  if (restart_index > kMaxRestartSupportedByHashIndex) {
     valid_ = false;
     return;
   }
-  if (key_and_restart_pairs_.size() >= 255) { // allow all mph encoding using only uint8_t
+  if (key_and_restart_pairs_.size() >= kMaxRestartSupportedByHashIndex) { // allow all mph encoding using only uint8_t
     valid_ = false;
     return;
   }
@@ -33,6 +34,16 @@ void DataBlockPerfectHashIndexBuilder::Add(const Slice& key,
 void DataBlockPerfectHashIndexBuilder::Finish(std::string& buffer) {
   assert(Valid());
   assert(key_and_restart_pairs_.size() <= kMaxRestartSupportedByHashIndex);
+
+  // if (key_and_restart_pairs_.empty()) {
+  //   valid_ = false;
+  //   return;
+  // }
+
+  {
+    stats_entry_count = key_and_restart_pairs_.size();
+    stats_est_size = EstimateSize();
+  }
 
   std::vector<std::pair<Slice, uint8_t>> kvs;
   kvs.reserve(key_and_restart_pairs_.size());
@@ -64,7 +75,7 @@ void DataBlockPerfectHashIndexBuilder::Finish(std::string& buffer) {
       ones -= used[h[i]] == 2;
     }
 
-    all.reserve(all.size() + ones);
+    all.reserve(all.size() + cap);
     for (uint8_t i = 0; i < cap; ++i) {
       if (used[i] == 1) {
         all.push_back(true);
@@ -99,12 +110,13 @@ void DataBlockPerfectHashIndexBuilder::Finish(std::string& buffer) {
 
   // Encoding [bit_v] [rank_prefix] [values] [level capacity] [NUM_LEVELS]
   // [BIT_VECTOR_SIZE]
-  size_t mph_size = bit_v.size() * 8 + rank_prefix.size() * 8 +
-                    values.size() * 8 + level_capacity.size() * 8 + 8 + 16;
-  if (buffer.size() + mph_size > kMaxBlockSizeSupportedByHashIndex) {
-    valid_ = false;
-    return;
-  }
+  size_t est_size = EstimateSize();
+  size_t mph_size = bit_v.size() * sizeof(uint8_t) + rank_prefix.size() * sizeof(uint8_t) +
+                    values.size() * sizeof(uint8_t) + level_capacity.size() * sizeof(uint8_t) + sizeof(uint8_t) + sizeof(uint16_t);
+  // if (mph_size > est_size) {
+  //   valid_ = false;
+  //   return;
+  // }
 
   for (uint8_t bit_i : bit_v) {
     buffer.append(const_cast<const char*>(reinterpret_cast<char*>(&bit_i)),
@@ -131,6 +143,13 @@ void DataBlockPerfectHashIndexBuilder::Finish(std::string& buffer) {
 
   // BIT_VECTOR_SIZE
   PutFixed16(&buffer, static_cast<uint16_t>(bit_v.size()));
+
+  // PutFixed64(&buffer, mph_size);
+
+  {
+    stats_num_levels = num_levels;
+    stats_size = mph_size;
+  }
 }
 
 void DataBlockPerfectHashIndexBuilder::Reset() {
@@ -141,6 +160,10 @@ void DataBlockPerfectHashIndexBuilder::Reset() {
 void DataBlockPerfectHashIndex::Initialize(const char* data, uint16_t size,
                                            uint16_t* map_offset) {
   assert(size >= sizeof(uint8_t) + sizeof(uint16_t));  // NUM_LEVELS + BIT_VECTOR_SIZE
+
+  // uint64_t actual_mph_size = DecodeFixed64(data + size - sizeof(uint64_t));
+  // size -= sizeof(uint64_t);
+
   bit_vector_size_ = DecodeFixed16(data + size - sizeof(uint16_t));
 
   uint8_t num_levels = DecodeFixed8(data + size - sizeof(uint16_t) - sizeof(uint8_t));
@@ -155,6 +178,8 @@ void DataBlockPerfectHashIndex::Initialize(const char* data, uint16_t size,
       sizeof(uint16_t) + (2 * bit_vector_size_ + num_levels + 1) * sizeof(uint8_t) +
       num_restart_index * sizeof(uint8_t);
   *map_offset = static_cast<uint16_t>(size - mph_size);
+
+  // assert(actual_mph_size == mph_size);
 }
 
 bool DataBlockPerfectHashIndex::get_bit(const char* data, uint32_t map_offset,
@@ -184,6 +209,11 @@ uint16_t DataBlockPerfectHashIndex::rank_bit(const char* data,
 
 uint8_t DataBlockPerfectHashIndex::Lookup(const char* data, uint32_t map_offset,
                                           const Slice& key) const {
+
+  // return kCollision;
+
+  auto start = std::chrono::high_resolution_clock::now();
+
   uint16_t pos = 0;
   for (uint8_t level = 0; level < level_capacity_.size(); ++level) {
     uint64_t seed = (level + 1) * kSeedJump;
@@ -198,11 +228,17 @@ uint8_t DataBlockPerfectHashIndex::Lookup(const char* data, uint32_t map_offset,
       const char* restart_indices =
           rank_prefix + bit_vector_size_ * sizeof(uint8_t);
 
+
+      auto end = std::chrono::high_resolution_clock::now();
+      stats_lookup_time = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
+
       return static_cast<uint8_t>(*(restart_indices + rank * sizeof(uint8_t)));
     }
     pos += level_capacity_[level];
   }
 
+  auto end = std::chrono::high_resolution_clock::now();
+  stats_lookup_time = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
   return kNoEntry;
 }
 
