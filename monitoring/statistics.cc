@@ -55,6 +55,7 @@ const std::vector<std::pair<Tickers, std::string>> TickersNameMap = {
     {BLOCK_CACHE_DATA_ADD_REDUNDANT, "rocksdb.block.cache.data.add.redundant"},
     {BLOCK_CACHE_COMPRESSION_DICT_ADD_REDUNDANT,
      "rocksdb.block.cache.compression.dict.add.redundant"},
+#ifdef CSC443_MPH_STATISTICS
     {BLOCK_NO_HASH_INDEX, "rocksdb.block.no.hash.index"},
     {BLOCK_HASH_INDEX, "rocksdb.block.hash.index"},
     {BLOCK_HASH_INDEX_CANCELLED, "rocksdb.block.hash.index.cancelled"},
@@ -64,6 +65,7 @@ const std::vector<std::pair<Tickers, std::string>> TickersNameMap = {
      "rocksdb.block.hash.index.buckets.cancelled"},
     {BLOCK_HASH_INDEX_BUCKETS_VALID, "rocksdb.block.hash.index.buckets.valid"},
     {BLOCK_PERFECT_HASH_INDEX, "rocksdb.block.perfect.hash.index"},
+#endif
     {SECONDARY_CACHE_HITS, "rocksdb.secondary.cache.hits"},
     {SECONDARY_CACHE_FILTER_HITS, "rocksdb.secondary.cache.filter.hits"},
     {SECONDARY_CACHE_INDEX_HITS, "rocksdb.secondary.cache.index.hits"},
@@ -355,12 +357,13 @@ const std::vector<std::pair<Histograms, std::string>> HistogramsNameMap = {
      "rocksdb.table.open.prefetch.tail.read.bytes"},
     {NUM_OP_PER_TRANSACTION, "rocksdb.num.op.per.transaction"},
 
+#ifdef CSC443_MPH_STATISTICS
     {TABLE_PERFECT_HASH_ENTRY_COUNT, "rocksdb.perfect.hash.entry.count"},
     {TABLE_PERFECT_HASH_NUM_LEVEL_COUNT, "rocksdb.perfect.hash.level.count"},
     {TABLE_PERFECT_HASH_SIZES, "rocksdb.perfect.hash.size.act"},
     {TABLE_PERFECT_HASH_SIZES_EST, "rocksdb.perfect.hash.size.est"},
     {TABLE_PERFECT_HASH_SEEK_TIME, "rocksdb.perfect.hash.seek.time"},
-
+#endif
 };
 
 std::shared_ptr<Statistics> CreateDBStatistics() {

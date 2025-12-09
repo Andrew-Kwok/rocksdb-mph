@@ -367,10 +367,12 @@ bool DataBlockIter::SeekForGetImpl(const Slice& target) {
           : data_block_perfect_hash_index_->Lookup(data_, map_offset,
                                                    target_user_key);
 
+#ifdef CSC443_MPH_STATISTICS
   if (data_block_perfect_hash_index_ && statistics_) {
     RecordTimeToHistogram(statistics_, TABLE_PERFECT_HASH_SEEK_TIME,
                           data_block_perfect_hash_index_->stats_lookup_time);
   }
+#endif
 
   if (entry == kCollision) {
     // HashSeek not effective, falling back
@@ -457,59 +459,6 @@ bool DataBlockIter::SeekForGetImpl(const Slice& target) {
   }
 
   // Here we are conservative and only support a limited set of cases
-  ValueType value_type = ExtractValueType(raw_key_.GetInternalKey());
-  if (value_type != ValueType::kTypeValue &&
-      value_type != ValueType::kTypeDeletion &&
-      value_type != ValueType::kTypeMerge &&
-      value_type != ValueType::kTypeSingleDeletion &&
-      value_type != ValueType::kTypeBlobIndex &&
-      value_type != ValueType::kTypeWideColumnEntity &&
-      value_type != ValueType::kTypeValuePreferredSeqno) {
-    SeekImpl(target);
-  }
-
-  // Result found, and the iter is correctly set.
-  return true;
-}
-
-bool DataBlockIter::SeekForGetPerfectHashImpl(const Slice& target) {
-  Slice target_user_key = ExtractUserKey(target);
-  uint32_t map_offset = restarts_ + num_restarts_ * sizeof(uint32_t);
-  uint8_t entry = data_block_perfect_hash_index_->Lookup(data_, map_offset,
-                                                         target_user_key);
-
-  if (entry == kNoEntry) {
-    entry = static_cast<uint8_t>(num_restarts_ - 1);
-  }
-
-  uint32_t restart_index = entry;
-  SeekToRestartPoint(restart_index);
-  current_ = GetRestartPoint(restart_index);
-  cur_entry_idx_ =
-      static_cast<int32_t>(restart_index * block_restart_interval_) - 1;
-  uint32_t limit = restarts_;
-  if (restart_index + 1 < num_restarts_) {
-    limit = GetRestartPoint(restart_index + 1);
-  }
-  // --- Linear scan inside this restart interval ---
-  while (current_ < limit) {
-    ++cur_entry_idx_;
-    bool shared;
-    if (!ParseNextDataKey(&shared) || CompareCurrentKey(target) >= 0) {
-      // Stop at the first key >= target
-      break;
-    }
-  }
-
-  if (current_ == restarts_) {
-    return true;  // may exist in next block
-  }
-
-  if (icmp_->user_comparator()->Compare(raw_key_.GetUserKey(),
-                                        target_user_key) != 0) {
-    return false;  // definitely not in this block
-  }
-
   ValueType value_type = ExtractValueType(raw_key_.GetInternalKey());
   if (value_type != ValueType::kTypeValue &&
       value_type != ValueType::kTypeDeletion &&

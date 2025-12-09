@@ -791,7 +791,6 @@ class DataBlockIter final : public BlockIter<Slice> {
   Statistics* statistics_;
 
   bool SeekForGetImpl(const Slice& target);
-  bool SeekForGetPerfectHashImpl(const Slice& target);
 };
 
 // Iterator over MetaBlocks.  MetaBlocks are similar to Data Blocks and

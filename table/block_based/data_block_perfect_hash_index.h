@@ -20,10 +20,12 @@ static_assert(kPerfectHashIndexMaxLevel < 128 &&
 
 class DataBlockPerfectHashIndexBuilder {
  public:
+#ifdef CSC443_MPH_STATISTICS
   size_t stats_num_levels{};
   size_t stats_size{};
   size_t stats_est_size{};
   size_t stats_entry_count{};
+#endif
 
   DataBlockPerfectHashIndexBuilder() : valid_(false) {}
 
@@ -36,13 +38,6 @@ class DataBlockPerfectHashIndexBuilder {
   inline size_t EstimateSize() const {
     const size_t n = hash_and_restart_pairs_.size();
     constexpr size_t kBytesPerKeyEstimate = 2;
-    // size_t estimated_num_bits = key_and_restart_pairs_.size() * 5;  //
-    // expected n*e bits under poisson(1) size_t bit_size = (estimated_num_bits
-    // + 7) / 8 * sizeof(uint8_t); size_t rank_prefix_size = bit_size; size_t
-    // restart_indices_size = key_and_restart_pairs_.size() * sizeof(uint8_t);
-    // size_t expected_num_level =
-    //     std::ceil(log2(key_and_restart_pairs_.size()));
-
     return n * kBytesPerKeyEstimate +
            kPerfectHashIndexMaxLevel * sizeof(uint8_t) + sizeof(uint8_t) +
            sizeof(uint16_t);
@@ -55,7 +50,9 @@ class DataBlockPerfectHashIndexBuilder {
 
 class DataBlockPerfectHashIndex {
  public:
+#ifdef CSC443_MPH_STATISTICS
   mutable uint64_t stats_lookup_time{};
+#endif
 
   DataBlockPerfectHashIndex() {}
 

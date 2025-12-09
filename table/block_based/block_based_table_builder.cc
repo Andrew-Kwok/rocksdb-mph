@@ -1282,6 +1282,8 @@ void BlockBasedTableBuilder::Flush() {
   }
 
   Slice uncompressed_block_data = r->data_block.Finish();
+
+#ifdef CSC443_MPH_STATISTICS
   // TODO: Temporary statistics to make sure hash index is built
   if (r->ioptions.stats) {
     uint32_t block_footer =
@@ -1313,6 +1315,7 @@ void BlockBasedTableBuilder::Flush() {
       RecordTick(r->ioptions.stats, BLOCK_NO_HASH_INDEX);
     }
   }
+#endif
 
   // NOTE: compression sampling is done here in the same thread as building
   // the uncompressed block because of the requirements to call table

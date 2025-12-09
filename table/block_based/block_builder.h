@@ -85,6 +85,7 @@ class BlockBuilder {
   // Return true iff no entries have been added since the last Reset()
   bool empty() const { return buffer_.empty(); }
 
+#ifdef CSC443_MPH_STATISTICS
   inline size_t GetHashIndexCancelledKeys() {
     return data_block_hash_index_builder_.cancelled_keys;
   }
@@ -113,6 +114,7 @@ class BlockBuilder {
   inline size_t GetPerfectHashIndexActSize() {
     return data_block_perfect_hash_index_builder_.stats_size;
   }
+#endif
 
  private:
   inline void AddWithLastKeyImpl(const Slice& key, const Slice& value,

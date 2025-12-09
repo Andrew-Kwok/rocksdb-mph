@@ -44,10 +44,10 @@ void DataBlockPerfectHashIndexBuilder::Finish(std::string& buffer) {
   assert(Valid());
   assert(hash_and_restart_pairs_.size() <= kPerfectHashIndexMaxEntry);
 
-  {
-    stats_entry_count = hash_and_restart_pairs_.size();
-    stats_est_size = EstimateSize();
-  }
+#ifdef CSC443_MPH_STATISTICS
+  stats_entry_count = hash_and_restart_pairs_.size();
+  stats_est_size = EstimateSize();
+#endif
 
   // Constructing Minimal Perfect Hashing
   std::vector<bool> all;
@@ -148,10 +148,12 @@ void DataBlockPerfectHashIndexBuilder::Finish(std::string& buffer) {
   // BIT_VECTOR_SIZE
   PutFixed16(&buffer, static_cast<uint16_t>(bit_v.size()));
 
+#ifdef CSC443_MPH_STATISTICS
   {
     stats_num_levels = static_cast<uint8_t>(level_capacity.size());
     stats_size = mph_size;
   }
+#endif
 }
 
 void DataBlockPerfectHashIndexBuilder::Reset() {

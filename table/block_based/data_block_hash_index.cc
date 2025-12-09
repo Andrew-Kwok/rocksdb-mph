@@ -55,6 +55,7 @@ void DataBlockHashIndexBuilder::Finish(std::string& buffer) {
     }
   }
 
+#ifdef CSC443_MPH_STATISTICS
   monitoring_num_buckets = num_buckets;
   for (int i = 0; i < num_buckets; ++i) {
     if (buckets[i] == kCollision)
@@ -74,6 +75,7 @@ void DataBlockHashIndexBuilder::Finish(std::string& buffer) {
       ++cancelled_keys;
     }
   }
+#endif
 
   for (uint8_t restart_index : buckets) {
     buffer.append(
@@ -89,13 +91,16 @@ void DataBlockHashIndexBuilder::Finish(std::string& buffer) {
 
 void DataBlockHashIndexBuilder::Reset() {
   estimated_num_buckets_ = 0;
+  valid_ = true;
+  hash_and_restart_pairs_.clear();
+
+#ifdef CSC443_MPH_STATISTICS
   cancelled_keys = 0;
   valid_keys = 0;
   monitoring_num_valid_buckets = 0;
   monitoring_num_buckets = 0;
   monitoring_num_cancelled_buckets = 0;
-  valid_ = true;
-  hash_and_restart_pairs_.clear();
+#endif
 }
 
 void DataBlockHashIndex::Initialize(const char* data, uint16_t size,
