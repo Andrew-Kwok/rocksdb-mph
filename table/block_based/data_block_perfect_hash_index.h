@@ -20,7 +20,10 @@ static_assert(kPerfectHashIndexMaxLevel < 128 &&
 
 class DataBlockPerfectHashIndexBuilder {
  public:
-#ifdef CSC443_MPH_STATISTICS
+#ifdef CSC494_MPH_STATISTICS
+  bool stats_is_perfect{};
+  size_t stats_bit_v_size{};
+  size_t stats_rank_p_size{};
   size_t stats_num_levels{};
   size_t stats_size{};
   size_t stats_est_size{};
@@ -50,7 +53,7 @@ class DataBlockPerfectHashIndexBuilder {
 
 class DataBlockPerfectHashIndex {
  public:
-#ifdef CSC443_MPH_STATISTICS
+#ifdef CSC494_MPH_STATISTICS
   mutable uint64_t stats_lookup_time{};
 #endif
 

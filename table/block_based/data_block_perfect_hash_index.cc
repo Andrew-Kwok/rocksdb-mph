@@ -44,7 +44,7 @@ void DataBlockPerfectHashIndexBuilder::Finish(std::string& buffer) {
   assert(Valid());
   assert(hash_and_restart_pairs_.size() <= kPerfectHashIndexMaxEntry);
 
-#ifdef CSC443_MPH_STATISTICS
+#ifdef CSC494_MPH_STATISTICS
   stats_entry_count = hash_and_restart_pairs_.size();
   stats_est_size = EstimateSize();
 #endif
@@ -148,8 +148,11 @@ void DataBlockPerfectHashIndexBuilder::Finish(std::string& buffer) {
   // BIT_VECTOR_SIZE
   PutFixed16(&buffer, static_cast<uint16_t>(bit_v.size()));
 
-#ifdef CSC443_MPH_STATISTICS
+#ifdef CSC494_MPH_STATISTICS
   {
+    stats_is_perfect = (num_levels & kIsPerfectHashIndex) > 0;
+    stats_bit_v_size = bit_v.size() * sizeof(uint8_t);
+    stats_rank_p_size = rank_prefix.size() * sizeof(uint8_t);
     stats_num_levels = static_cast<uint8_t>(level_capacity.size());
     stats_size = mph_size;
   }
@@ -159,6 +162,16 @@ void DataBlockPerfectHashIndexBuilder::Finish(std::string& buffer) {
 void DataBlockPerfectHashIndexBuilder::Reset() {
   hash_and_restart_pairs_.clear();
   valid_ = true;
+
+#ifdef CSC494_MPH_STATISTICS
+  stats_is_perfect = false;
+  stats_bit_v_size = 0;
+  stats_rank_p_size = 0;
+  stats_num_levels = 0;
+  stats_size = 0;
+  stats_est_size = 0;
+  stats_entry_count = 0;
+#endif
 }
 
 void DataBlockPerfectHashIndex::Initialize(const char* data, uint16_t size,

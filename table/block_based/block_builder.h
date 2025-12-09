@@ -85,7 +85,13 @@ class BlockBuilder {
   // Return true iff no entries have been added since the last Reset()
   bool empty() const { return buffer_.empty(); }
 
-#ifdef CSC443_MPH_STATISTICS
+#ifdef CSC494_MPH_STATISTICS
+  inline size_t GetHashIndexEntryCount() {
+    return data_block_hash_index_builder_.monitoring_entry_count;
+  }
+  inline size_t GetHashIndexSize() {
+    return data_block_hash_index_builder_.monitoring_hash_size;
+  }
   inline size_t GetHashIndexCancelledKeys() {
     return data_block_hash_index_builder_.cancelled_keys;
   }
@@ -102,6 +108,15 @@ class BlockBuilder {
     return data_block_hash_index_builder_.monitoring_num_cancelled_buckets;
   }
 
+  inline size_t GetPerfectHashIsPerfect() {
+    return data_block_perfect_hash_index_builder_.stats_is_perfect;
+  }
+  inline size_t GetPerfectHashIndexBitVSize() {
+    return data_block_perfect_hash_index_builder_.stats_bit_v_size;
+  }
+  inline size_t GetPerfectHashIndexRankPSize() {
+    return data_block_perfect_hash_index_builder_.stats_rank_p_size;
+  }
   inline size_t GetPerfectHashIndexNumLevels() {
     return data_block_perfect_hash_index_builder_.stats_num_levels;
   }

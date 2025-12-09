@@ -1283,7 +1283,7 @@ void BlockBasedTableBuilder::Flush() {
 
   Slice uncompressed_block_data = r->data_block.Finish();
 
-#ifdef CSC443_MPH_STATISTICS
+#ifdef CSC494_MPH_STATISTICS
   // TODO: Temporary statistics to make sure hash index is built
   if (r->ioptions.stats) {
     uint32_t block_footer =
@@ -1301,8 +1301,31 @@ void BlockBasedTableBuilder::Flush() {
       RecordTick(r->ioptions.stats, BLOCK_HASH_INDEX_BUCKETS_VALID,
                  r->data_block.GetHashIndexNumValidBuckets());
       RecordTick(r->ioptions.stats, BLOCK_HASH_INDEX);
+
+      RecordInHistogram(r->ioptions.stats, TABLE_HASH_ENTRY_COUNT,
+                        r->data_block.GetHashIndexEntryCount());
+      RecordInHistogram(r->ioptions.stats, TABLE_HASH_SIZE,
+                        r->data_block.GetHashIndexSize());
+      RecordInHistogram(r->ioptions.stats, TABLE_HASH_CANCELLED,
+                        r->data_block.GetHashIndexCancelledKeys());
+      RecordInHistogram(r->ioptions.stats, TABLE_HASH_VALID,
+                        r->data_block.GetHashIndexValidKeys());
+      RecordInHistogram(r->ioptions.stats, TABLE_HASH_BUCKET_COUNT,
+                        r->data_block.GetHashIndexNumBuckets());
+      RecordInHistogram(r->ioptions.stats, TABLE_HASH_BUCKET_CANCELLED,
+                        r->data_block.GetHashIndexNumCancelledBuckets());
+      RecordInHistogram(r->ioptions.stats, TABLE_HASH_BUCKET_VALID,
+                        r->data_block.GetHashIndexNumValidBuckets());
+
     } else if (block_footer >> 30 & 1) {  // perfect hash index
       RecordTick(r->ioptions.stats, BLOCK_PERFECT_HASH_INDEX);
+
+      RecordInHistogram(r->ioptions.stats, TABLE_PERFECT_HASH_IS_PERFECT,
+                        r->data_block.GetPerfectHashIsPerfect());
+      RecordInHistogram(r->ioptions.stats, TABLE_PERFECT_HASH_BIT_V_SIZE,
+                        r->data_block.GetPerfectHashIndexBitVSize());
+      RecordInHistogram(r->ioptions.stats, TABLE_PERFECT_HASH_RANK_P_SIZE,
+                        r->data_block.GetPerfectHashIndexRankPSize());
       RecordInHistogram(r->ioptions.stats, TABLE_PERFECT_HASH_NUM_LEVEL_COUNT,
                         r->data_block.GetPerfectHashIndexNumLevels());
       RecordInHistogram(r->ioptions.stats, TABLE_PERFECT_HASH_ENTRY_COUNT,

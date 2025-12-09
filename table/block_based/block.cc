@@ -367,7 +367,7 @@ bool DataBlockIter::SeekForGetImpl(const Slice& target) {
           : data_block_perfect_hash_index_->Lookup(data_, map_offset,
                                                    target_user_key);
 
-#ifdef CSC443_MPH_STATISTICS
+#ifdef CSC494_MPH_STATISTICS
   if (data_block_perfect_hash_index_ && statistics_) {
     RecordTimeToHistogram(statistics_, TABLE_PERFECT_HASH_SEEK_TIME,
                           data_block_perfect_hash_index_->stats_lookup_time);

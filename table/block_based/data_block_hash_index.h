@@ -74,7 +74,9 @@ const double kDefaultUtilRatio = 0.75;
 class DataBlockHashIndexBuilder {
  public:
   // For Monitoring
-#ifdef CSC443_MPH_STATISTICS
+#ifdef CSC494_MPH_STATISTICS
+  size_t monitoring_entry_count{};
+  size_t monitoring_hash_size{};
   size_t valid_keys{};
   size_t cancelled_keys{};
   size_t monitoring_num_buckets{};
