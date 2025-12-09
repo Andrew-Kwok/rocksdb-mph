@@ -17,11 +17,13 @@ namespace ROCKSDB_NAMESPACE {
 const int kDataBlockIndexTypeBitShift = 31;
 const int kDataBlockPerfectHashIndexTypeBitShift = 30;
 
-// 0x7FFFFFFF
-const uint32_t kMaxNumRestarts = (1u << kDataBlockIndexTypeBitShift) - 1u;
+// 0x6FFFFFFF
+const uint32_t kMaxNumRestarts =
+    (1u << kDataBlockPerfectHashIndexTypeBitShift) - 1u;
 
-// 0x7FFFFFFF
-const uint32_t kNumRestartsMask = (1u << kDataBlockIndexTypeBitShift) - 1u;
+// 0x6FFFFFFF
+const uint32_t kNumRestartsMask =
+    (1u << kDataBlockPerfectHashIndexTypeBitShift) - 1u;
 
 uint32_t PackIndexTypeAndNumRestarts(
     BlockBasedTableOptions::DataBlockIndexType index_type,

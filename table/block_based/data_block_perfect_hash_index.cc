@@ -11,6 +11,13 @@
 
 namespace ROCKSDB_NAMESPACE {
 
+inline uint64_t SplitMix64(uint64_t& state) {
+  uint64_t z = (state += 0x9E3779B97F4A7C15ULL);
+  z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9ULL;
+  z = (z ^ (z >> 27)) * 0x94D049BB133111EBULL;
+  return z ^ (z >> 31);
+}
+
 void DataBlockPerfectHashIndexBuilder::Add(const Slice& key,
                                            const size_t restart_index) {
   assert(Valid());
@@ -18,13 +25,15 @@ void DataBlockPerfectHashIndexBuilder::Add(const Slice& key,
     valid_ = false;
     return;
   }
-  if (key_and_restart_pairs_.size() >= kMaxRestartSupportedByHashIndex) { // allow all mph encoding using only uint8_t
+  if (hash_and_restart_pairs_.size() >=
+      kPerfectHashIndexMaxEntry) {  // allow all mph encoding using only uint8_t
     valid_ = false;
     return;
   }
 
-  key_and_restart_pairs_.emplace_back(key.ToString(),
-                                      static_cast<uint8_t>(restart_index));
+  uint64_t hash_value = GetSliceHash64(key);
+  hash_and_restart_pairs_.emplace_back(hash_value,
+                                       static_cast<uint8_t>(restart_index));
 
   if (EstimateSize() > kMaxBlockSizeSupportedByHashIndex) {
     valid_ = false;
@@ -33,41 +42,30 @@ void DataBlockPerfectHashIndexBuilder::Add(const Slice& key,
 
 void DataBlockPerfectHashIndexBuilder::Finish(std::string& buffer) {
   assert(Valid());
-  assert(key_and_restart_pairs_.size() <= kMaxRestartSupportedByHashIndex);
-
-  // if (key_and_restart_pairs_.empty()) {
-  //   valid_ = false;
-  //   return;
-  // }
+  assert(hash_and_restart_pairs_.size() <= kPerfectHashIndexMaxEntry);
 
   {
-    stats_entry_count = key_and_restart_pairs_.size();
+    stats_entry_count = hash_and_restart_pairs_.size();
     stats_est_size = EstimateSize();
-  }
-
-  std::vector<std::pair<Slice, uint8_t>> kvs;
-  kvs.reserve(key_and_restart_pairs_.size());
-  for (uint8_t i = 0; i < key_and_restart_pairs_.size(); ++i) {
-    Slice s(key_and_restart_pairs_[i].first);
-    uint8_t restart_index{key_and_restart_pairs_[i].second};
-    kvs.emplace_back(s, restart_index);
   }
 
   // Constructing Minimal Perfect Hashing
   std::vector<bool> all;
-  all.reserve(kvs.size() * 2);
+  all.reserve(hash_and_restart_pairs_.size() * 2);
 
   std::vector<uint8_t> level_capacity;
   std::vector<uint8_t> values;
-  for (uint8_t level = 0; !kvs.empty(); ++level) {
-    uint64_t seed = (level + 1) * kSeedJump;
-    uint8_t cap = static_cast<uint8_t>(kvs.size());
+  for (uint8_t level = 0;
+       !hash_and_restart_pairs_.empty() && level < kPerfectHashIndexMaxLevel;
+       ++level) {
+    uint8_t cap = static_cast<uint8_t>(hash_and_restart_pairs_.size()) | 1;
     level_capacity.push_back(cap);
 
     uint8_t ones = 0;
     std::vector<uint8_t> used(cap, 0), h(cap, 0), h_inv(cap, 0);
-    for (uint8_t i = 0; i < cap; ++i) {
-      h[i] = GetSliceHash64(kvs[i].first, seed) % cap;
+    for (uint8_t i = 0; i < hash_and_restart_pairs_.size(); ++i) {
+      uint64_t mix = SplitMix64(hash_and_restart_pairs_[i].first);
+      h[i] = FastRange64(mix, cap);
       h_inv[h[i]] = i;
       ++used[h[i]];
 
@@ -75,23 +73,22 @@ void DataBlockPerfectHashIndexBuilder::Finish(std::string& buffer) {
       ones -= used[h[i]] == 2;
     }
 
-    all.reserve(all.size() + cap);
     for (uint8_t i = 0; i < cap; ++i) {
       if (used[i] == 1) {
         all.push_back(true);
-        values.push_back(kvs[h_inv[i]].second);
+        values.push_back(hash_and_restart_pairs_[h_inv[i]].second);
       } else {
         all.push_back(false);
       }
     }
 
-    std::vector<std::pair<Slice, uint8_t>> nxt;
-    nxt.reserve(cap - ones);
-    for (uint8_t i = 0; i < cap; ++i)
+    std::vector<std::pair<uint64_t, uint8_t>> nxt;
+    nxt.reserve(hash_and_restart_pairs_.size() - ones);
+    for (uint8_t i = 0; i < hash_and_restart_pairs_.size(); ++i)
       if (used[h[i]] != 1) {
-        nxt.push_back(kvs[i]);
+        nxt.push_back(hash_and_restart_pairs_[i]);
       }
-    kvs.swap(nxt);
+    hash_and_restart_pairs_.swap(nxt);
   }
 
   // Constructing Bit Vector
@@ -109,14 +106,13 @@ void DataBlockPerfectHashIndexBuilder::Finish(std::string& buffer) {
   }
 
   // Encoding [bit_v] [rank_prefix] [values] [level capacity] [NUM_LEVELS]
-  // [BIT_VECTOR_SIZE]
+  // [NUM_VALUES] [BIT_VECTOR_SIZE]
   size_t est_size = EstimateSize();
-  size_t mph_size = bit_v.size() * sizeof(uint8_t) + rank_prefix.size() * sizeof(uint8_t) +
-                    values.size() * sizeof(uint8_t) + level_capacity.size() * sizeof(uint8_t) + sizeof(uint8_t) + sizeof(uint16_t);
-  // if (mph_size > est_size) {
-  //   valid_ = false;
-  //   return;
-  // }
+  size_t mph_size = bit_v.size() * sizeof(uint8_t) +
+                    rank_prefix.size() * sizeof(uint8_t) +
+                    values.size() * sizeof(uint8_t) +
+                    level_capacity.size() * sizeof(uint8_t) + sizeof(uint8_t) +
+                    sizeof(uint8_t) + sizeof(uint16_t);
 
   for (uint8_t bit_i : bit_v) {
     buffer.append(const_cast<const char*>(reinterpret_cast<char*>(&bit_i)),
@@ -138,108 +134,110 @@ void DataBlockPerfectHashIndexBuilder::Finish(std::string& buffer) {
 
   // NUM_LEVELS
   uint8_t num_levels = static_cast<uint8_t>(level_capacity.size());
-  buffer.append(const_cast<const char*>(reinterpret_cast<char*>(&num_levels)), sizeof(num_levels));
-  // PutFixed16(&buffer, static_cast<uint16_t>(level_capacity.size()));
+  if (hash_and_restart_pairs_.empty()) {
+    num_levels |= kIsPerfectHashIndex;
+  }
+  buffer.append(const_cast<const char*>(reinterpret_cast<char*>(&num_levels)),
+                sizeof(num_levels));
+
+  // NUM_RESTARTS
+  uint8_t num_values = values.size();
+  buffer.append(const_cast<const char*>(reinterpret_cast<char*>(&num_values)),
+                sizeof(num_values));
 
   // BIT_VECTOR_SIZE
   PutFixed16(&buffer, static_cast<uint16_t>(bit_v.size()));
 
-  // PutFixed64(&buffer, mph_size);
-
   {
-    stats_num_levels = num_levels;
+    stats_num_levels = static_cast<uint8_t>(level_capacity.size());
     stats_size = mph_size;
   }
 }
 
 void DataBlockPerfectHashIndexBuilder::Reset() {
-  key_and_restart_pairs_.clear();
+  hash_and_restart_pairs_.clear();
   valid_ = true;
 }
 
 void DataBlockPerfectHashIndex::Initialize(const char* data, uint16_t size,
                                            uint16_t* map_offset) {
-  assert(size >= sizeof(uint8_t) + sizeof(uint16_t));  // NUM_LEVELS + BIT_VECTOR_SIZE
-
-  // uint64_t actual_mph_size = DecodeFixed64(data + size - sizeof(uint64_t));
-  // size -= sizeof(uint64_t);
+  assert(size >= 2 * sizeof(uint8_t) +
+                     sizeof(uint16_t));  // NUM_LEVELS + BIT_VECTOR_SIZE
 
   bit_vector_size_ = DecodeFixed16(data + size - sizeof(uint16_t));
+  num_restarts_ =
+      DecodeFixed8(data + size - sizeof(uint16_t) - sizeof(uint8_t));
+  num_levels_ =
+      DecodeFixed8(data + size - sizeof(uint16_t) - 2 * sizeof(uint8_t));
 
-  uint8_t num_levels = DecodeFixed8(data + size - sizeof(uint16_t) - sizeof(uint8_t));
-  level_capacity_.resize(num_levels);
-  for (uint8_t i = 0; i < num_levels; ++i) {
-    level_capacity_[num_levels - i - 1] =
-        DecodeFixed8(data + size - sizeof(uint16_t) - (1 + i + 1) * sizeof(uint8_t));
+  if (num_levels_ & kIsPerfectHashIndex) {
+    is_perfect_ = true;
+    num_levels_ ^= kIsPerfectHashIndex;
   }
 
-  uint8_t num_restart_index = level_capacity_[0];
-  uint16_t mph_size =
-      sizeof(uint16_t) + (2 * bit_vector_size_ + num_levels + 1) * sizeof(uint8_t) +
-      num_restart_index * sizeof(uint8_t);
+  memcpy(&level_capacity_,
+         data + size - sizeof(uint16_t) - (num_levels_ + 2) * sizeof(uint8_t),
+         num_levels_);
+
+  uint16_t mph_size = (2 * bit_vector_size_ + num_restarts_ + num_levels_ + 2) *
+                          sizeof(uint8_t) +
+                      sizeof(uint16_t);
   *map_offset = static_cast<uint16_t>(size - mph_size);
-
-  // assert(actual_mph_size == mph_size);
 }
 
-bool DataBlockPerfectHashIndex::get_bit(const char* data, uint32_t map_offset,
-                                        uint16_t i) const {
-  const char* bit_vector = data + map_offset;
-  uint16_t block = (i >> 3);
-  uint8_t bit_word = DecodeFixed8(bit_vector + block * sizeof(uint8_t));
-  return (bit_word >> (i & 7)) & 1;
-}
-
-uint16_t DataBlockPerfectHashIndex::rank_bit(const char* data,
-                                             uint32_t map_offset,
-                                             uint16_t i) const {
-  const char* bit_vector = data + map_offset;
-  uint16_t block = (i >> 3);
-  uint16_t bit_word = DecodeFixed8(bit_vector + block * sizeof(uint8_t));
-  uint8_t mask = (1 << (i & 7)) - 1;
-  if (block) {
-    const char* rank_prefix = bit_vector + bit_vector_size_ * sizeof(uint8_t);
-    uint8_t rank_p =
-        DecodeFixed8(rank_prefix + (block - 1) * sizeof(uint8_t));
-    return rank_p + __builtin_popcount(bit_word & mask);
-  } else {
-    return __builtin_popcount(bit_word & mask);
-  }
-}
+// static uint8_t RankBit(const uint8_t* bit_vector, uint32_t bit_vector_length,
+// uint32_t bit_pos) {
+//   uint8_t rank = 0;
+//
+//   // 1) process full 8-byte chunks with 64-bit popcount
+//   const uint32_t full_words = bit_pos >> 6;
+//   const uint32_t word_offset = bit_pos & 63;
+//   const uint64_t* words = reinterpret_cast<const uint64_t*>(bit_vector);
+//
+//   for (uint32_t i = 0; i < full_words; ++i) {
+//     rank += __builtin_popcountll(words[i]);
+//   }
+//
+//   // 2) process remaining bits
+//   const uint64_t mask = (1ull << word_offset) - 1;
+//   if (mask) {
+//     rank += __builtin_popcountll(words[full_words] & mask);
+//   }
+//
+//   return rank;
+// }
 
 uint8_t DataBlockPerfectHashIndex::Lookup(const char* data, uint32_t map_offset,
                                           const Slice& key) const {
+  const uint8_t* bit_vector =
+      reinterpret_cast<const uint8_t*>(data + map_offset);
+  const uint8_t* rank_prefix = bit_vector + bit_vector_size_ * sizeof(uint8_t);
+  const uint8_t* restart_indices =
+      rank_prefix + bit_vector_size_ * sizeof(uint8_t);
 
-  // return kCollision;
+  uint64_t key_hash = GetSliceHash64(key);
 
-  auto start = std::chrono::high_resolution_clock::now();
+  uint16_t level_offset{0};
+  for (uint8_t level = 0; level < num_levels_; ++level) {
+    uint64_t mix = SplitMix64(key_hash);
+    uint64_t h = FastRange64(mix, level_capacity_[level]);
 
-  uint16_t pos = 0;
-  for (uint8_t level = 0; level < level_capacity_.size(); ++level) {
-    uint64_t seed = (level + 1) * kSeedJump;
-    auto h = GetSliceHash64(key, seed) % level_capacity_[level];
+    const uint16_t pos = level_offset + h;
+    const uint16_t block = pos >> 3;
+    const uint16_t block_off = pos & 7;
 
-    if (get_bit(data, map_offset, pos + h)) {
-      uint16_t rank = rank_bit(data, map_offset, pos + h);
-
-      const char* bit_vector = data + map_offset;
-      const char* rank_prefix =
-          bit_vector + bit_vector_size_ * sizeof(uint8_t);
-      const char* restart_indices =
-          rank_prefix + bit_vector_size_ * sizeof(uint8_t);
-
-
-      auto end = std::chrono::high_resolution_clock::now();
-      stats_lookup_time = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
-
-      return static_cast<uint8_t>(*(restart_indices + rank * sizeof(uint8_t)));
+    if (bit_vector[block] >> block_off & 1) {
+      uint8_t rank =
+          __builtin_popcount(bit_vector[block] & ((1 << block_off) - 1));
+      if (block) {
+        rank += rank_prefix[block - 1];
+      }
+      return restart_indices[rank];
     }
-    pos += level_capacity_[level];
+    level_offset += level_capacity_[level];
   }
 
-  auto end = std::chrono::high_resolution_clock::now();
-  stats_lookup_time = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
-  return kNoEntry;
+  return is_perfect_ ? kNoEntry : kCollision;
 }
 
 }  // namespace ROCKSDB_NAMESPACE

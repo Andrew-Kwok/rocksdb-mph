@@ -368,7 +368,8 @@ bool DataBlockIter::SeekForGetImpl(const Slice& target) {
                                                    target_user_key);
 
   if (data_block_perfect_hash_index_ && statistics_) {
-    RecordTimeToHistogram(statistics_, TABLE_PERFECT_HASH_SEEK_TIME, data_block_perfect_hash_index_->stats_lookup_time);
+    RecordTimeToHistogram(statistics_, TABLE_PERFECT_HASH_SEEK_TIME,
+                          data_block_perfect_hash_index_->stats_lookup_time);
   }
 
   if (entry == kCollision) {
@@ -474,7 +475,8 @@ bool DataBlockIter::SeekForGetImpl(const Slice& target) {
 bool DataBlockIter::SeekForGetPerfectHashImpl(const Slice& target) {
   Slice target_user_key = ExtractUserKey(target);
   uint32_t map_offset = restarts_ + num_restarts_ * sizeof(uint32_t);
-  uint8_t entry = data_block_perfect_hash_index_->Lookup(data_, map_offset, target_user_key);
+  uint8_t entry = data_block_perfect_hash_index_->Lookup(data_, map_offset,
+                                                         target_user_key);
 
   if (entry == kNoEntry) {
     entry = static_cast<uint8_t>(num_restarts_ - 1);
@@ -522,7 +524,6 @@ bool DataBlockIter::SeekForGetPerfectHashImpl(const Slice& target) {
   // Result found, and the iter is correctly set.
   return true;
 }
-
 
 void IndexBlockIter::SeekImpl(const Slice& target) {
 #ifndef NDEBUG
@@ -1162,9 +1163,10 @@ Block::Block(BlockContents&& contents, size_t read_amp_bytes_per_bit,
         }
         break;
       case BlockBasedTableOptions::kDataBlockBinaryAndPerfectHash:
-        if (size < sizeof(uint32_t) /* block footer */
-          + sizeof(uint8_t) /* num levels */
-          + sizeof(uint16_t) /* bit vector size */) {
+        if (size < sizeof(uint32_t)      /* block footer */
+                       + sizeof(uint8_t) /* num levels */
+                       + sizeof(uint8_t) /* num values */
+                       + sizeof(uint16_t) /* bit vector size */) {
           size = 0;
           break;
         }
@@ -1363,8 +1365,8 @@ DataBlockIter* Block::NewDataIterator(const Comparator* raw_ucmp,
         data_block_hash_index_.Valid() ? &data_block_hash_index_ : nullptr,
         data_block_perfect_hash_index_.Valid() ? &data_block_perfect_hash_index_
                                                : nullptr,
-        stats,
-        protection_bytes_per_key_, kv_checksum_, block_restart_interval_);
+        stats, protection_bytes_per_key_, kv_checksum_,
+        block_restart_interval_);
     if (read_amp_bitmap_) {
       if (read_amp_bitmap_->GetStatistics() != stats) {
         // DB changed the Statistics pointer, we need to notify read_amp_bitmap_

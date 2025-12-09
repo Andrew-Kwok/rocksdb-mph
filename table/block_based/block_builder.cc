@@ -146,13 +146,10 @@ Slice BlockBuilder::Finish() {
       CurrentSizeEstimate() <= kMaxBlockSizeSupportedByHashIndex) {
     data_block_hash_index_builder_.Finish(buffer_);
     index_type = BlockBasedTableOptions::kDataBlockBinaryAndHash;
-  } else if (data_block_perfect_hash_index_builder_.Valid() && CurrentSizeEstimate() <= kMaxBlockSizeSupportedByHashIndex) {
-    // TODO: Should fix Finish to return boolean
+  } else if (data_block_perfect_hash_index_builder_.Valid() &&
+             CurrentSizeEstimate() <= kMaxBlockSizeSupportedByHashIndex) {
     data_block_perfect_hash_index_builder_.Finish(buffer_);
     index_type = BlockBasedTableOptions::kDataBlockBinaryAndPerfectHash;
-    // if (data_block_perfect_hash_index_builder_.Valid()) {
-    //   index_type = BlockBasedTableOptions::kDataBlockBinaryAndPerfectHash;
-    // }
   }
 
   // footer is a packed format of data_block_index_type and num_restarts

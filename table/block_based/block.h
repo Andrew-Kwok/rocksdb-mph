@@ -694,9 +694,8 @@ class DataBlockIter final : public BlockIter<Slice> {
                   bool user_defined_timestamps_persisted,
                   DataBlockHashIndex* data_block_hash_index,
                   DataBlockPerfectHashIndex* data_block_perfect_hash_index,
-                  Statistics* statistics,
-                  uint8_t protection_bytes_per_key, const char* kv_checksum,
-                  uint32_t block_restart_interval) {
+                  Statistics* statistics, uint8_t protection_bytes_per_key,
+                  const char* kv_checksum, uint32_t block_restart_interval) {
     InitializeBase(raw_ucmp, data, restarts, num_restarts, global_seqno,
                    block_contents_pinned, user_defined_timestamps_persisted,
                    protection_bytes_per_key, kv_checksum,

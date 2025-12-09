@@ -55,11 +55,12 @@ void DataBlockHashIndexBuilder::Finish(std::string& buffer) {
     }
   }
 
-
   monitoring_num_buckets = num_buckets;
   for (int i = 0; i < num_buckets; ++i) {
-    if (buckets[i] == kCollision) ++monitoring_num_cancelled_buckets;
-    else if (buckets[i] != kNoEntry) ++monitoring_num_valid_buckets;
+    if (buckets[i] == kCollision)
+      ++monitoring_num_cancelled_buckets;
+    else if (buckets[i] != kNoEntry)
+      ++monitoring_num_valid_buckets;
   }
 
   // Just for debugging some statistics

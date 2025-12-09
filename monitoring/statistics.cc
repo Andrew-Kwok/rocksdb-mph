@@ -60,7 +60,8 @@ const std::vector<std::pair<Tickers, std::string>> TickersNameMap = {
     {BLOCK_HASH_INDEX_CANCELLED, "rocksdb.block.hash.index.cancelled"},
     {BLOCK_HASH_INDEX_VALID, "rocksdb.block.hash.index.valid"},
     {BLOCK_HASH_INDEX_BUCKETS, "rocksdb.block.hash.index.buckets"},
-    {BLOCK_HASH_INDEX_BUCKETS_CANCELLED, "rocksdb.block.hash.index.buckets.cancelled"},
+    {BLOCK_HASH_INDEX_BUCKETS_CANCELLED,
+     "rocksdb.block.hash.index.buckets.cancelled"},
     {BLOCK_HASH_INDEX_BUCKETS_VALID, "rocksdb.block.hash.index.buckets.valid"},
     {BLOCK_PERFECT_HASH_INDEX, "rocksdb.block.perfect.hash.index"},
     {SECONDARY_CACHE_HITS, "rocksdb.secondary.cache.hits"},
@@ -354,11 +355,11 @@ const std::vector<std::pair<Histograms, std::string>> HistogramsNameMap = {
      "rocksdb.table.open.prefetch.tail.read.bytes"},
     {NUM_OP_PER_TRANSACTION, "rocksdb.num.op.per.transaction"},
 
-  {TABLE_PERFECT_HASH_ENTRY_COUNT, "rocksdb.perfect.hash.entry.count"},
-  {TABLE_PERFECT_HASH_NUM_LEVEL_COUNT, "rocksdb.perfect.hash.level.count"},
-  {TABLE_PERFECT_HASH_SIZES, "rocksdb.perfect.hash.size.act"},
-  {TABLE_PERFECT_HASH_SIZES_EST, "rocksdb.perfect.hash.size.est"},
-  {TABLE_PERFECT_HASH_SEEK_TIME, "rocksdb.perfect.hash.seek.time"},
+    {TABLE_PERFECT_HASH_ENTRY_COUNT, "rocksdb.perfect.hash.entry.count"},
+    {TABLE_PERFECT_HASH_NUM_LEVEL_COUNT, "rocksdb.perfect.hash.level.count"},
+    {TABLE_PERFECT_HASH_SIZES, "rocksdb.perfect.hash.size.act"},
+    {TABLE_PERFECT_HASH_SIZES_EST, "rocksdb.perfect.hash.size.est"},
+    {TABLE_PERFECT_HASH_SEEK_TIME, "rocksdb.perfect.hash.seek.time"},
 
 };
 
