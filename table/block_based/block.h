@@ -24,6 +24,7 @@
 #include "rocksdb/table.h"
 #include "table/block_based/block_prefix_index.h"
 #include "table/block_based/data_block_hash_index.h"
+#include "table/block_based/data_block_perfect_hash_index.h"
 #include "table/format.h"
 #include "table/internal_iterator.h"
 #include "test_util/sync_point.h"
@@ -286,6 +287,7 @@ class Block {
   uint32_t block_restart_interval_{0};
   uint8_t protection_bytes_per_key_{0};
   DataBlockHashIndex data_block_hash_index_;
+  DataBlockPerfectHashIndex data_block_perfect_hash_index_;
 };
 
 // A `BlockIter` iterates over the entries in a `Block`'s data buffer. The
@@ -691,8 +693,9 @@ class DataBlockIter final : public BlockIter<Slice> {
                   bool block_contents_pinned,
                   bool user_defined_timestamps_persisted,
                   DataBlockHashIndex* data_block_hash_index,
-                  uint8_t protection_bytes_per_key, const char* kv_checksum,
-                  uint32_t block_restart_interval) {
+                  DataBlockPerfectHashIndex* data_block_perfect_hash_index,
+                  Statistics* statistics, uint8_t protection_bytes_per_key,
+                  const char* kv_checksum, uint32_t block_restart_interval) {
     InitializeBase(raw_ucmp, data, restarts, num_restarts, global_seqno,
                    block_contents_pinned, user_defined_timestamps_persisted,
                    protection_bytes_per_key, kv_checksum,
@@ -701,6 +704,8 @@ class DataBlockIter final : public BlockIter<Slice> {
     read_amp_bitmap_ = read_amp_bitmap;
     last_bitmap_offset_ = current_ + 1;
     data_block_hash_index_ = data_block_hash_index;
+    data_block_perfect_hash_index_ = data_block_perfect_hash_index;
+    statistics_ = statistics;
   }
 
   Slice value() const override {
@@ -719,14 +724,19 @@ class DataBlockIter final : public BlockIter<Slice> {
 #ifndef NDEBUG
     if (TEST_Corrupt_Callback("DataBlockIter::SeekForGet")) return true;
 #endif
-    if (!data_block_hash_index_) {
+    if (data_block_hash_index_) {
+      bool res = SeekForGetImpl(target);
+      UpdateKey();
+      return res;
+    } else if (data_block_perfect_hash_index_) {
+      bool res = SeekForGetImpl(target);
+      UpdateKey();
+      return res;
+    } else {
       SeekImpl(target);
       UpdateKey();
       return true;
     }
-    bool res = SeekForGetImpl(target);
-    UpdateKey();
-    return res;
   }
 
   void Invalidate(const Status& s) override {
@@ -777,6 +787,8 @@ class DataBlockIter final : public BlockIter<Slice> {
   int32_t prev_entries_idx_ = -1;
 
   DataBlockHashIndex* data_block_hash_index_;
+  DataBlockPerfectHashIndex* data_block_perfect_hash_index_;
+  Statistics* statistics_;
 
   bool SeekForGetImpl(const Slice& target);
 };

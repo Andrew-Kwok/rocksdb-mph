@@ -265,8 +265,9 @@ struct BlockBasedTableOptions {
 
   // The index type that will be used for the data block.
   enum DataBlockIndexType : char {
-    kDataBlockBinarySearch = 0,   // traditional block type
-    kDataBlockBinaryAndHash = 1,  // additional hash index
+    kDataBlockBinarySearch = 0,          // traditional block type
+    kDataBlockBinaryAndHash = 1,         // additional hash index
+    kDataBlockBinaryAndPerfectHash = 2,  // additional perfect hash index
   };
 
   DataBlockIndexType data_block_index_type = kDataBlockBinarySearch;

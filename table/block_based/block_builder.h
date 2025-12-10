@@ -15,6 +15,7 @@
 #include "rocksdb/slice.h"
 #include "rocksdb/table.h"
 #include "table/block_based/data_block_hash_index.h"
+#include "table/block_based/data_block_perfect_hash_index.h"
 
 namespace ROCKSDB_NAMESPACE {
 
@@ -69,9 +70,13 @@ class BlockBuilder {
   // Returns an estimate of the current (uncompressed) size of the block
   // we are building.
   inline size_t CurrentSizeEstimate() const {
-    return estimate_ + (data_block_hash_index_builder_.Valid()
-                            ? data_block_hash_index_builder_.EstimateSize()
-                            : 0);
+    return estimate_ +
+           (data_block_hash_index_builder_.Valid()
+                ? data_block_hash_index_builder_.EstimateSize()
+                : 0) +
+           (data_block_perfect_hash_index_builder_.Valid()
+                ? data_block_perfect_hash_index_builder_.EstimateSize()
+                : 0);
   }
 
   // Returns an estimated block size after appending key and value.
@@ -79,6 +84,55 @@ class BlockBuilder {
 
   // Return true iff no entries have been added since the last Reset()
   bool empty() const { return buffer_.empty(); }
+
+#ifdef CSC494_MPH_STATISTICS
+  inline size_t GetHashIndexEntryCount() {
+    return data_block_hash_index_builder_.monitoring_entry_count;
+  }
+  inline size_t GetHashIndexSize() {
+    return data_block_hash_index_builder_.monitoring_hash_size;
+  }
+  inline size_t GetHashIndexCancelledKeys() {
+    return data_block_hash_index_builder_.cancelled_keys;
+  }
+  inline size_t GetHashIndexValidKeys() {
+    return data_block_hash_index_builder_.valid_keys;
+  }
+  inline size_t GetHashIndexNumBuckets() {
+    return data_block_hash_index_builder_.monitoring_num_buckets;
+  }
+  inline size_t GetHashIndexNumValidBuckets() {
+    return data_block_hash_index_builder_.monitoring_num_valid_buckets;
+  }
+  inline size_t GetHashIndexNumCancelledBuckets() {
+    return data_block_hash_index_builder_.monitoring_num_cancelled_buckets;
+  }
+
+  inline size_t GetPerfectHashIsPerfect() {
+    return data_block_perfect_hash_index_builder_.stats_is_perfect;
+  }
+  inline size_t GetPerfectHashIndexBitVSize() {
+    return data_block_perfect_hash_index_builder_.stats_bit_v_size;
+  }
+  inline size_t GetPerfectHashIndexRankPSize() {
+    return data_block_perfect_hash_index_builder_.stats_rank_p_size;
+  }
+  inline size_t GetPerfectHashIndexNumRestarts() {
+    return data_block_perfect_hash_index_builder_.stats_num_restarts;
+  }
+  inline size_t GetPerfectHashIndexNumLevels() {
+    return data_block_perfect_hash_index_builder_.stats_num_levels;
+  }
+  inline size_t GetPerfectHashIndexNumEntry() {
+    return data_block_perfect_hash_index_builder_.stats_entry_count;
+  }
+  inline size_t GetPerfectHashIndexEstSize() {
+    return data_block_perfect_hash_index_builder_.stats_est_size;
+  }
+  inline size_t GetPerfectHashIndexActSize() {
+    return data_block_perfect_hash_index_builder_.stats_size;
+  }
+#endif
 
  private:
   inline void AddWithLastKeyImpl(const Slice& key, const Slice& value,
@@ -120,6 +174,7 @@ class BlockBuilder {
   bool finished_;  // Has Finish() been called?
   std::string last_key_;
   DataBlockHashIndexBuilder data_block_hash_index_builder_;
+  DataBlockPerfectHashIndexBuilder data_block_perfect_hash_index_builder_;
 #ifndef NDEBUG
   bool add_with_last_key_called_ = false;
 #endif

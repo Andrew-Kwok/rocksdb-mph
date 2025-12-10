@@ -59,6 +59,12 @@ inline void EncodeFixed64(char* buf, uint64_t value) {
 // Lower-level versions of Get... that read directly from a character buffer
 // without any bounds checking.
 
+inline uint8_t DecodeFixed8(const char* ptr) {
+  uint8_t result;
+  memcpy(&result, ptr, sizeof(result));
+  return result;
+}
+
 inline uint16_t DecodeFixed16(const char* ptr) {
   if (port::kLittleEndian) {
     // Load the raw bytes

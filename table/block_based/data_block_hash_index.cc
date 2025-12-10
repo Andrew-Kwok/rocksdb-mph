@@ -55,6 +55,31 @@ void DataBlockHashIndexBuilder::Finish(std::string& buffer) {
     }
   }
 
+#ifdef CSC494_MPH_STATISTICS
+  monitoring_entry_count = hash_and_restart_pairs_.size();
+  monitoring_hash_size = num_buckets * sizeof(uint8_t) + sizeof(uint16_t);
+
+  monitoring_num_buckets = num_buckets;
+  for (int i = 0; i < num_buckets; ++i) {
+    if (buckets[i] == kCollision)
+      ++monitoring_num_cancelled_buckets;
+    else if (buckets[i] != kNoEntry)
+      ++monitoring_num_valid_buckets;
+  }
+
+  // Just for debugging some statistics
+  for (auto& entry : hash_and_restart_pairs_) {
+    uint32_t hash_value = entry.first;
+    uint8_t restart_index = entry.second;
+    uint16_t buck_idx = static_cast<uint16_t>(hash_value % num_buckets);
+    if (buckets[buck_idx] == restart_index) {
+      ++valid_keys;
+    } else if (buckets[buck_idx] != restart_index) {
+      ++cancelled_keys;
+    }
+  }
+#endif
+
   for (uint8_t restart_index : buckets) {
     buffer.append(
         const_cast<const char*>(reinterpret_cast<char*>(&restart_index)),
@@ -71,6 +96,16 @@ void DataBlockHashIndexBuilder::Reset() {
   estimated_num_buckets_ = 0;
   valid_ = true;
   hash_and_restart_pairs_.clear();
+
+#ifdef CSC494_MPH_STATISTICS
+  monitoring_entry_count = 0;
+  monitoring_hash_size = 0;
+  cancelled_keys = 0;
+  valid_keys = 0;
+  monitoring_num_valid_buckets = 0;
+  monitoring_num_buckets = 0;
+  monitoring_num_cancelled_buckets = 0;
+#endif
 }
 
 void DataBlockHashIndex::Initialize(const char* data, uint16_t size,

@@ -68,6 +68,9 @@ BlockBuilder::BlockBuilder(
       data_block_hash_index_builder_.Initialize(
           data_block_hash_table_util_ratio);
       break;
+    case BlockBasedTableOptions::kDataBlockBinaryAndPerfectHash:
+      data_block_perfect_hash_index_builder_.Initialize();
+      break;
     default:
       assert(0);
   }
@@ -85,6 +88,9 @@ void BlockBuilder::Reset() {
   last_key_.clear();
   if (data_block_hash_index_builder_.Valid()) {
     data_block_hash_index_builder_.Reset();
+  }
+  if (data_block_perfect_hash_index_builder_.Valid()) {
+    data_block_perfect_hash_index_builder_.Reset();
   }
 #ifndef NDEBUG
   add_with_last_key_called_ = false;
@@ -140,6 +146,10 @@ Slice BlockBuilder::Finish() {
       CurrentSizeEstimate() <= kMaxBlockSizeSupportedByHashIndex) {
     data_block_hash_index_builder_.Finish(buffer_);
     index_type = BlockBasedTableOptions::kDataBlockBinaryAndHash;
+  } else if (data_block_perfect_hash_index_builder_.Valid() &&
+             CurrentSizeEstimate() <= kMaxBlockSizeSupportedByHashIndex) {
+    data_block_perfect_hash_index_builder_.Finish(buffer_);
+    index_type = BlockBasedTableOptions::kDataBlockBinaryAndPerfectHash;
   }
 
   // footer is a packed format of data_block_index_type and num_restarts
@@ -248,6 +258,12 @@ inline void BlockBuilder::AddWithLastKeyImpl(const Slice& key,
     assert(!is_user_key_);
     data_block_hash_index_builder_.Add(ExtractUserKey(key),
                                        restarts_.size() - 1);
+  }
+
+  if (data_block_perfect_hash_index_builder_.Valid()) {
+    assert(!is_user_key_);
+    data_block_perfect_hash_index_builder_.Add(ExtractUserKey(key),
+                                               restarts_.size() - 1);
   }
 
   counter_++;
