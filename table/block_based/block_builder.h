@@ -117,6 +117,9 @@ class BlockBuilder {
   inline size_t GetPerfectHashIndexRankPSize() {
     return data_block_perfect_hash_index_builder_.stats_rank_p_size;
   }
+  inline size_t GetPerfectHashIndexNumRestarts() {
+    return data_block_perfect_hash_index_builder_.stats_num_restarts;
+  }
   inline size_t GetPerfectHashIndexNumLevels() {
     return data_block_perfect_hash_index_builder_.stats_num_levels;
   }

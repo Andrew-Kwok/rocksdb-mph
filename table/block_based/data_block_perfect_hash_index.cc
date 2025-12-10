@@ -1,5 +1,6 @@
 #include "table/block_based/data_block_perfect_hash_index.h"
 
+#include <iostream>
 #include <chrono>
 #include <string>
 #include <vector>
@@ -62,19 +63,26 @@ void DataBlockPerfectHashIndexBuilder::Finish(std::string& buffer) {
     level_capacity.push_back(cap);
 
     uint8_t ones = 0;
-    std::vector<uint8_t> used(cap, 0), h(cap, 0), h_inv(cap, 0);
+    std::vector<uint8_t> h(cap, 0), h_inv(cap, 0);
+    std::vector<int16_t> used(cap, -1);
     for (uint8_t i = 0; i < hash_and_restart_pairs_.size(); ++i) {
       uint64_t mix = SplitMix64(hash_and_restart_pairs_[i].first);
       h[i] = FastRange64(mix, cap);
       h_inv[h[i]] = i;
-      ++used[h[i]];
 
-      ones += used[h[i]] == 1;
-      ones -= used[h[i]] == 2;
+      if (used[h[i]] == -2) {
+        // cancelled slot
+      } else if (used[h[i]] == -1) {
+        used[h[i]] = hash_and_restart_pairs_[i].second;
+        ones++;
+      } else if (used[h[i]] != hash_and_restart_pairs_[i].second) {
+        used[h[i]] = -2;
+        ones--;
+      }
     }
 
     for (uint8_t i = 0; i < cap; ++i) {
-      if (used[i] == 1) {
+      if (used[i] >= 0) {
         all.push_back(true);
         values.push_back(hash_and_restart_pairs_[h_inv[i]].second);
       } else {
@@ -85,7 +93,7 @@ void DataBlockPerfectHashIndexBuilder::Finish(std::string& buffer) {
     std::vector<std::pair<uint64_t, uint8_t>> nxt;
     nxt.reserve(hash_and_restart_pairs_.size() - ones);
     for (uint8_t i = 0; i < hash_and_restart_pairs_.size(); ++i)
-      if (used[h[i]] != 1) {
+      if (used[h[i]] < 0) {
         nxt.push_back(hash_and_restart_pairs_[i]);
       }
     hash_and_restart_pairs_.swap(nxt);
@@ -153,6 +161,7 @@ void DataBlockPerfectHashIndexBuilder::Finish(std::string& buffer) {
     stats_is_perfect = (num_levels & kIsPerfectHashIndex) > 0;
     stats_bit_v_size = bit_v.size() * sizeof(uint8_t);
     stats_rank_p_size = rank_prefix.size() * sizeof(uint8_t);
+    stats_num_restarts = num_values;
     stats_num_levels = static_cast<uint8_t>(level_capacity.size());
     stats_size = mph_size;
   }
@@ -167,6 +176,7 @@ void DataBlockPerfectHashIndexBuilder::Reset() {
   stats_is_perfect = false;
   stats_bit_v_size = 0;
   stats_rank_p_size = 0;
+  stats_num_restarts = 0;
   stats_num_levels = 0;
   stats_size = 0;
   stats_est_size = 0;
@@ -224,6 +234,10 @@ void DataBlockPerfectHashIndex::Initialize(const char* data, uint16_t size,
 
 uint8_t DataBlockPerfectHashIndex::Lookup(const char* data, uint32_t map_offset,
                                           const Slice& key) const {
+#ifdef CSC494_MPH_STATISTICS
+  auto start = std::chrono::high_resolution_clock::now();
+#endif
+
   const uint8_t* bit_vector =
       reinterpret_cast<const uint8_t*>(data + map_offset);
   const uint8_t* rank_prefix = bit_vector + bit_vector_size_ * sizeof(uint8_t);
@@ -247,11 +261,20 @@ uint8_t DataBlockPerfectHashIndex::Lookup(const char* data, uint32_t map_offset,
       if (block) {
         rank += rank_prefix[block - 1];
       }
+
+#ifdef CSC494_MPH_STATISTICS
+      auto end = std::chrono::high_resolution_clock::now();
+      stats_lookup_time = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
+#endif
       return restart_indices[rank];
     }
     level_offset += level_capacity_[level];
   }
 
+#ifdef CSC494_MPH_STATISTICS
+  auto end = std::chrono::high_resolution_clock::now();
+  stats_lookup_time = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
+#endif
   return is_perfect_ ? kNoEntry : kCollision;
 }
 

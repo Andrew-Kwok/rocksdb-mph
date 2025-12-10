@@ -1326,6 +1326,8 @@ void BlockBasedTableBuilder::Flush() {
                         r->data_block.GetPerfectHashIndexBitVSize());
       RecordInHistogram(r->ioptions.stats, TABLE_PERFECT_HASH_RANK_P_SIZE,
                         r->data_block.GetPerfectHashIndexRankPSize());
+      RecordInHistogram(r->ioptions.stats, TABLE_PERFECT_HASH_NUM_RESTART,
+                  r->data_block.GetPerfectHashIndexNumRestarts());
       RecordInHistogram(r->ioptions.stats, TABLE_PERFECT_HASH_NUM_LEVEL_COUNT,
                         r->data_block.GetPerfectHashIndexNumLevels());
       RecordInHistogram(r->ioptions.stats, TABLE_PERFECT_HASH_ENTRY_COUNT,

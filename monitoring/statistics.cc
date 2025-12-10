@@ -371,6 +371,7 @@ const std::vector<std::pair<Histograms, std::string>> HistogramsNameMap = {
     {TABLE_PERFECT_HASH_NUM_LEVEL_COUNT, "rocksdb.perfect.hash.level.count"},
     {TABLE_PERFECT_HASH_BIT_V_SIZE, "rocksdb.perfect.hash.bit_v.size"},
     {TABLE_PERFECT_HASH_RANK_P_SIZE, "rocksdb.perfect.hash.rank_p.size"},
+    {TABLE_PERFECT_HASH_NUM_RESTART, "rocksdb.perfect.hash.num.restart"},
     {TABLE_PERFECT_HASH_SIZES, "rocksdb.perfect.hash.size.act"},
     {TABLE_PERFECT_HASH_SIZES_EST, "rocksdb.perfect.hash.size.est"},
     {TABLE_PERFECT_HASH_SEEK_TIME, "rocksdb.perfect.hash.seek.time"},

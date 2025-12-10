@@ -33,6 +33,35 @@ TEST(DataBlockPerfectHashIndex, Simple) {
   }
 }
 
+TEST(DataBlockPerfectHashIndex, DuplicateValues) {
+  DataBlockPerfectHashIndexBuilder builder;
+  builder.Initialize();
+
+  constexpr int n_keys = 100;
+
+  for (int i = 0; i < n_keys; ++i) {
+    std::string key("key" + std::to_string(i));
+    uint8_t restart_point = i % 10;
+    builder.Add(key, restart_point);
+  }
+
+  std::string buffer("fake"), buffer2;
+  builder.Finish(buffer);
+
+  buffer2 = buffer;  // test for the correctness of relative offset
+
+  Slice s(buffer2);
+  DataBlockPerfectHashIndex index;
+  uint16_t map_offset;
+  index.Initialize(s.data(), static_cast<uint16_t>(s.size()), &map_offset);
+
+  for (int i = 0; i < n_keys; ++i) {
+    std::string key("key" + std::to_string(i));
+    uint8_t restart_point = i % 10;
+    ASSERT_EQ(index.Lookup(s.data(), map_offset, key), restart_point);
+  }
+}
+
 }  // namespace ROCKSDB_NAMESPACE
 
 int main(int argc, char** argv) {
