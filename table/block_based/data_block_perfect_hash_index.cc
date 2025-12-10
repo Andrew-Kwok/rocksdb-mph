@@ -25,14 +25,13 @@ void DataBlockPerfectHashIndexBuilder::Add(const Slice& key,
     valid_ = false;
     return;
   }
-  if (hash_and_restart_pairs_.size() >=
+  if (key_and_restart_pairs_.size() >=
       kPerfectHashIndexMaxEntry) {  // allow all mph encoding using only uint8_t
     valid_ = false;
     return;
   }
 
-  uint64_t hash_value = GetSliceHash64(key);
-  hash_and_restart_pairs_.emplace_back(hash_value,
+  key_and_restart_pairs_.emplace_back(key.ToString(),
                                        static_cast<uint8_t>(restart_index));
 
   if (EstimateSize() > kMaxBlockSizeSupportedByHashIndex) {
@@ -42,30 +41,38 @@ void DataBlockPerfectHashIndexBuilder::Add(const Slice& key,
 
 void DataBlockPerfectHashIndexBuilder::Finish(std::string& buffer) {
   assert(Valid());
-  assert(hash_and_restart_pairs_.size() <= kPerfectHashIndexMaxEntry);
+  assert(key_and_restart_pairs_.size() <= kPerfectHashIndexMaxEntry);
 
 #ifdef CSC494_MPH_STATISTICS
-  stats_entry_count = hash_and_restart_pairs_.size();
+  stats_entry_count = key_and_restart_pairs_.size();
   stats_est_size = EstimateSize();
 #endif
 
+  std::vector<std::pair<Slice, uint8_t>> kvs;
+  kvs.reserve(key_and_restart_pairs_.size());
+  for (uint16_t i = 0; i < key_and_restart_pairs_.size(); ++i) {
+    Slice s(key_and_restart_pairs_[i].first);
+    uint8_t restart_index{key_and_restart_pairs_[i].second};
+    kvs.emplace_back(s, restart_index);
+  }
+
   // Constructing Minimal Perfect Hashing
   std::vector<bool> all;
-  all.reserve(hash_and_restart_pairs_.size() * 2);
+  all.reserve(key_and_restart_pairs_.size() * 2);
 
   std::vector<uint8_t> level_capacity;
   std::vector<uint8_t> values;
   for (uint8_t level = 0;
-       !hash_and_restart_pairs_.empty() && level < kPerfectHashIndexMaxLevel;
+       !kvs.empty() && level < kPerfectHashIndexMaxLevel;
        ++level) {
-    uint8_t cap = static_cast<uint8_t>(hash_and_restart_pairs_.size()) | 1;
+    uint64_t seed = (level + 1) * kSeedJump;
+    uint8_t cap = static_cast<uint8_t>(kvs.size()) | 1;
     level_capacity.push_back(cap);
 
     uint8_t ones = 0;
     std::vector<uint8_t> used(cap, 0), h(cap, 0), h_inv(cap, 0);
-    for (uint8_t i = 0; i < hash_and_restart_pairs_.size(); ++i) {
-      uint64_t mix = SplitMix64(hash_and_restart_pairs_[i].first);
-      h[i] = FastRange64(mix, cap);
+    for (uint8_t i = 0; i < kvs.size(); ++i) {
+      h[i] = FastRange64(GetSliceHash64(kvs[i].first, seed), cap);
       h_inv[h[i]] = i;
       ++used[h[i]];
 
@@ -76,19 +83,19 @@ void DataBlockPerfectHashIndexBuilder::Finish(std::string& buffer) {
     for (uint8_t i = 0; i < cap; ++i) {
       if (used[i] == 1) {
         all.push_back(true);
-        values.push_back(hash_and_restart_pairs_[h_inv[i]].second);
+        values.push_back(kvs[h_inv[i]].second);
       } else {
         all.push_back(false);
       }
     }
 
-    std::vector<std::pair<uint64_t, uint8_t>> nxt;
-    nxt.reserve(hash_and_restart_pairs_.size() - ones);
-    for (uint8_t i = 0; i < hash_and_restart_pairs_.size(); ++i)
+    std::vector<std::pair<Slice, uint8_t>> nxt;
+    nxt.reserve(kvs.size() - ones);
+    for (uint8_t i = 0; i < kvs.size(); ++i)
       if (used[h[i]] != 1) {
-        nxt.push_back(hash_and_restart_pairs_[i]);
+        nxt.push_back(kvs[i]);
       }
-    hash_and_restart_pairs_.swap(nxt);
+    kvs.swap(nxt);
   }
 
   // Constructing Bit Vector
@@ -134,7 +141,7 @@ void DataBlockPerfectHashIndexBuilder::Finish(std::string& buffer) {
 
   // NUM_LEVELS
   uint8_t num_levels = static_cast<uint8_t>(level_capacity.size());
-  if (hash_and_restart_pairs_.empty()) {
+  if (kvs.empty()) {
     num_levels |= kIsPerfectHashIndex;
   }
   buffer.append(const_cast<const char*>(reinterpret_cast<char*>(&num_levels)),
@@ -160,7 +167,7 @@ void DataBlockPerfectHashIndexBuilder::Finish(std::string& buffer) {
 }
 
 void DataBlockPerfectHashIndexBuilder::Reset() {
-  hash_and_restart_pairs_.clear();
+  key_and_restart_pairs_.clear();
   valid_ = true;
 
 #ifdef CSC494_MPH_STATISTICS
@@ -230,12 +237,10 @@ uint8_t DataBlockPerfectHashIndex::Lookup(const char* data, uint32_t map_offset,
   const uint8_t* restart_indices =
       rank_prefix + bit_vector_size_ * sizeof(uint8_t);
 
-  uint64_t key_hash = GetSliceHash64(key);
-
   uint16_t level_offset{0};
   for (uint8_t level = 0; level < num_levels_; ++level) {
-    uint64_t mix = SplitMix64(key_hash);
-    uint64_t h = FastRange64(mix, level_capacity_[level]);
+    uint64_t seed = (level + 1) * kSeedJump;
+    uint64_t h = FastRange64(GetSliceHash64(key, seed), level_capacity_[level]);
 
     const uint16_t pos = level_offset + h;
     const uint16_t block = pos >> 3;

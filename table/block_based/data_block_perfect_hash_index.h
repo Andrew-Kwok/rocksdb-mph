@@ -39,7 +39,7 @@ class DataBlockPerfectHashIndexBuilder {
   void Finish(std::string& buffer);
   void Reset();
   inline size_t EstimateSize() const {
-    const size_t n = hash_and_restart_pairs_.size();
+    const size_t n = key_and_restart_pairs_.size();
     constexpr size_t kBytesPerKeyEstimate = 2;
     return n * kBytesPerKeyEstimate +
            kPerfectHashIndexMaxLevel * sizeof(uint8_t) + sizeof(uint8_t) +
@@ -48,7 +48,7 @@ class DataBlockPerfectHashIndexBuilder {
 
  private:
   bool valid_;
-  std::vector<std::pair<uint64_t, uint8_t>> hash_and_restart_pairs_;
+  std::vector<std::pair<std::string, uint8_t>> key_and_restart_pairs_;
 };
 
 class DataBlockPerfectHashIndex {
