@@ -55,6 +55,17 @@ const std::vector<std::pair<Tickers, std::string>> TickersNameMap = {
     {BLOCK_CACHE_DATA_ADD_REDUNDANT, "rocksdb.block.cache.data.add.redundant"},
     {BLOCK_CACHE_COMPRESSION_DICT_ADD_REDUNDANT,
      "rocksdb.block.cache.compression.dict.add.redundant"},
+#ifdef CSC494_MPH_STATISTICS
+    {BLOCK_NO_HASH_INDEX, "rocksdb.block.no.hash.index"},
+    {BLOCK_HASH_INDEX, "rocksdb.block.hash.index"},
+    {BLOCK_HASH_INDEX_CANCELLED, "rocksdb.block.hash.index.cancelled"},
+    {BLOCK_HASH_INDEX_VALID, "rocksdb.block.hash.index.valid"},
+    {BLOCK_HASH_INDEX_BUCKETS, "rocksdb.block.hash.index.buckets"},
+    {BLOCK_HASH_INDEX_BUCKETS_CANCELLED,
+     "rocksdb.block.hash.index.buckets.cancelled"},
+    {BLOCK_HASH_INDEX_BUCKETS_VALID, "rocksdb.block.hash.index.buckets.valid"},
+    {BLOCK_PERFECT_HASH_INDEX, "rocksdb.block.perfect.hash.index"},
+#endif
     {SECONDARY_CACHE_HITS, "rocksdb.secondary.cache.hits"},
     {SECONDARY_CACHE_FILTER_HITS, "rocksdb.secondary.cache.filter.hits"},
     {SECONDARY_CACHE_INDEX_HITS, "rocksdb.secondary.cache.index.hits"},
@@ -345,6 +356,25 @@ const std::vector<std::pair<Histograms, std::string>> HistogramsNameMap = {
     {TABLE_OPEN_PREFETCH_TAIL_READ_BYTES,
      "rocksdb.table.open.prefetch.tail.read.bytes"},
     {NUM_OP_PER_TRANSACTION, "rocksdb.num.op.per.transaction"},
+
+#ifdef CSC494_MPH_STATISTICS
+    {TABLE_HASH_ENTRY_COUNT, "rocksdb.table.hash.entry.count"},
+    {TABLE_HASH_SIZE, "rocksdb.table.hash.size"},
+    {TABLE_HASH_CANCELLED, "rocksdb.table.hash.cancelled"},
+    {TABLE_HASH_VALID, "rocksdb.table.hash.valid"},
+    {TABLE_HASH_BUCKET_COUNT, "rocksdb.table.hash.bucket.count"},
+    {TABLE_HASH_BUCKET_CANCELLED, "rocksdb.table.hash.bucket.cancelled"},
+    {TABLE_HASH_BUCKET_VALID, "rocksdb.table.hash.bucket.valid"},
+
+    {TABLE_PERFECT_HASH_IS_PERFECT, "rocksdb.perfect.hash.is.perfect"},
+    {TABLE_PERFECT_HASH_ENTRY_COUNT, "rocksdb.perfect.hash.entry.count"},
+    {TABLE_PERFECT_HASH_NUM_LEVEL_COUNT, "rocksdb.perfect.hash.level.count"},
+    {TABLE_PERFECT_HASH_BIT_V_SIZE, "rocksdb.perfect.hash.bit_v.size"},
+    {TABLE_PERFECT_HASH_RANK_P_SIZE, "rocksdb.perfect.hash.rank_p.size"},
+    {TABLE_PERFECT_HASH_SIZES, "rocksdb.perfect.hash.size.act"},
+    {TABLE_PERFECT_HASH_SIZES_EST, "rocksdb.perfect.hash.size.est"},
+    {TABLE_PERFECT_HASH_SEEK_TIME, "rocksdb.perfect.hash.seek.time"},
+#endif
 };
 
 std::shared_ptr<Statistics> CreateDBStatistics() {
